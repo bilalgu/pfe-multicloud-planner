@@ -1,0 +1,9 @@
+{
+    "provider": "aws",
+    "resources": {
+        "database": {
+            "type": "mysql",
+            "publicly_accessible": false
+        }
+    }
+}
