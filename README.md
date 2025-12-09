@@ -1,66 +1,132 @@
 # PoC - Planificateurs multi-niveaux d’architectures
 
-## Pipeline du PoC (version minimale)
+## Pipeline du PoC
 
 ```
-Phrase → IA → JSON → (Sécurité) → Terraform → Deploy
+Phrase --> IA (Gemini) --> JSON --> Sécurité (Python) --> Terraform (Python) --> Fichier main.tf
 ```
-
-Dans la V1, la sécurité intervient avant la génération Terraform.
-
-Pourquoi ?
-- plus simple
-- rapide à valider
-- testable immédiatement
-- idéal pour assembler tous les blocs la semaine prochaine
-
-La sécurité post-Terraform (analyse du code .tf) viendra plus tard, car plus réaliste mais plus complexe.
-
-## Rôle de la sécurité
-
-La règle de sécurité sert de garde-fou :
-
-- empêche un JSON dangereux d’aller vers Terraform  
-- évite de déployer une infrastructure risquée  
-- valide l’idée du projet : génération d’infrastructure sécurisée  
 
 ## Objectif
 
-Créer une règle de sécurité simple, testable, basée sur le JSON, avec un script Python qui renvoie :
+Générer automatiquement une infrastructure AWS à partir d'une phrase utilisateur avec un garde-fou sécurité.
 
-- `OK` → JSON conforme  
-- `NOT OK` → JSON dangereux  
+---
 
-## Scope
+## Structure du projet
 
-### Inclus
-
-- 1 seule règle
-- JSON comme entrée  
-- Script Python minimal :
-	- lire le JSON  
-	- vérifier 1 condition  
-	- afficher OK / NOT OK  
-- 2 JSON de test : `good.json` et `bad.json`
-
-## Règle de sécurité
-
-1er règle :  La base de données ne doit pas être publique  
-> (champ `publicly_accessible` interdit à `true`)
-
-**Pourquoi ?**
-
-Dans AWS une base de données publique est accessible depuis Internet, cela viole immédiatement les bonnes pratiques de sécurité 
-
-## Test
-
-```bash
-python3 check.py bad.json  
-python3 check.py good.json
+```
+pfe-multicloud-planner/
+├── backend/
+│   ├── check.py           # Sécurité (Bilal)
+│   ├── generate_tf.py     # Génération Terraform (Sira)
+│   └── test.py            # IA Gemini (Arlette)
+├── frontend/              # UI Next.js (Nesrine)
+├── .env
+└── README.md
 ```
 
-## Références
+---
 
-- https://docs.python.org/3/library/json.html#json.load  
-- https://docs.python.org/3/library/stdtypes.html#dict.get  
-- https://docs.python.org/3/library/sys.html#sys.argv  
+## Lancer le PoC
+
+### Backend Python (IA + Sécurité + Terraform)
+
+```bash
+python3 -m venv pfe-planner
+source pfe-planner/bin/activate
+pip install google-genai python-dotenv
+```
+
+Configurer la clé API Gemini :
+
+```bash
+cat .env
+# GEMINI_API_KEY="VOTRE_CLÉ_ICI"
+```
+
+Remplacer les chemins dans `frontend/app/api/gen/route.ts` (ligne 15 et 41) :
+
+```bash
+realpath backend/test.py           # --> TEST_SCRIPT_PATH
+realpath backend/check.py          # --> CHECK_SCRIPT_PATH
+realpath backend/generate_tf.py    # --> TF_SCRIPT_PATH
+echo "$(pwd)/pfe-planner/bin/python3"  # --> PYTHON_PATH
+```
+
+### Frontend Next.js (UI)
+
+```bash
+cd frontend/
+npm install
+npm run dev
+```
+
+Ouvrir :
+
+```
+http://localhost:3000
+```
+
+(ou :3001 si 3000 occupé)
+
+---
+
+## Exemple d'utilisation
+
+Entrée dans l'UI :
+
+```
+Créer une base de données privée
+```
+
+**Résultat attendu dans l'UI :**
+
+```
+Ton besoin :
+Créer une base de données privée
+
+JSON :
+{"provider":"aws","region":"eu-west-1","resources": ... }
+
+Sécurité :
+OK : la base de donnees n'est pas publique
+```
+
+**Logs navigateur (DevTools) :**
+
+```json
+{
+  "json": {...},
+  "security": "OK : la base de donnees n'est pas publique",
+  "terraform": "GENERATED"
+}
+```
+
+**Logs terminal (Next.js) :**
+
+```
+Sécurité validée --> Génération Terraform...
+Terraform généré dans /tmp/main.tf
+```
+
+**Vérifier le fichier généré :**
+
+```bash
+ls -lh /tmp/main.tf
+head /tmp/main.tf
+grep publicly_accessible /tmp/main.tf
+```
+
+---
+
+## Exemple de blocage sécurité
+
+Entrée :
+
+```
+Créer une base de données publique
+```
+
+Résultat attendu : pas de génération Terraform (blocage sécurité).
+
+**Note :** actuellement le blocage n'est pas implémenté dans `frontend/app/api/gen/route.ts`, à corriger.
