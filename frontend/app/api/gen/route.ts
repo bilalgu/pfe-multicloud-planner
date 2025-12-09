@@ -12,9 +12,9 @@ export async function GET(request: Request) {
     const phrase = searchParams.get("phrase") || "";
 
     try {
-        const pythonPath = "/home/bilal/Git/pfe-multicloud-planner/Projet_PFE/pfe-planner/bin/python3";
-        const scriptPath = "/home/bilal/Git/pfe-multicloud-planner/Projet_PFE/test.py";
-        const checkScriptPath = "/home/bilal/Git/pfe-multicloud-planner/check.py";
+        const pythonPath = "PYTHON_PATH";
+        const scriptPath = "TEST_SCRIPT_PATH";
+        const checkScriptPath = "CHECK_SCRIPT_PATH";
 
         // Exécution du script IA Arlette
         const { stdout } = await execPromise(
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
             console.log("Sécurité validée → Génération Terraform...");
 
             // Backend de Sira
-            const tfScriptPath = "/home/bilal/Git/pfe-multicloud-planner/backend-sira/generate_tf.py";
+            const tfScriptPath = "TF_SCRIPT_PATH";
 
             const { stdout: tfOut } = await execPromise(
                 `${pythonPath} ${tfScriptPath} ${tmpJson}`
