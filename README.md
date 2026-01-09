@@ -36,7 +36,7 @@ python3 -m venv pfe-planner
 source pfe-planner/bin/activate
 pip install google-genai python-dotenv
 ```
-
+###test nesrine
 Configurer la clé API Gemini :
 
 ```bash
