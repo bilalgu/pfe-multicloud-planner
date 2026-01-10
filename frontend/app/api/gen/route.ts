@@ -16,9 +16,9 @@ export async function GET(request: Request) {
     }
 
     try {
-        const pythonPath = "/home/bilal/Git/pfe-multicloud-planner/pfe-planner/bin/python3";
-        const scriptPath = "/home/bilal/Git/pfe-multicloud-planner/backend/test.py";
-        const checkScriptPath = "/home/bilal/Git/pfe-multicloud-planner/backend/check.py";
+        const pythonPath = "PYTHON_PATH";
+        const scriptPath = "TEST_SCRIPT_PATH";
+        const checkScriptPath = "CHECK_SCRIPT_PATH";
 
         // Exécution du script IA Arlette
         let json: any;
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
             console.log("Security OK → generating Terraform");
 
             // Backend de Sira
-            const tfScriptPath = "/home/bilal/Git/pfe-multicloud-planner/backend/generate_tf.py";
+            const tfScriptPath = "TF_SCRIPT_PATH";
 
             const { stdout: tfOut } = await execPromise(`${pythonPath} ${tfScriptPath} ${tmpJson}`);
             console.log(tfOut);
