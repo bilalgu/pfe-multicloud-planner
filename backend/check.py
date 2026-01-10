@@ -10,11 +10,12 @@ with open(path,"r") as f:
 
 # Récupère la valeur "publicly_accessible" dans resources.database
 # Si la clé n'existe pas, on considere False par default
-# === A mettre dans la pipeline du PoC aussi ===
 is_public = data.get("resources", {}).get("database", {}).get("publicly_accessible", False)
 
 # Affiche OK / NOT OK si if_public True or False
 if is_public:
-    print("NOT OK: la base de donnees est publique (interdit)")
+    print("NOT_OK")
+    sys.exit(1)
 else:
-    print("OK : la base de donnees n'est pas publique")
+    print("OK")
+    sys.exit(0)

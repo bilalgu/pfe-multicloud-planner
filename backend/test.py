@@ -19,8 +19,8 @@ try:
         
     client = genai.Client(api_key=api_key)
 except Exception as e:
-    print(f"Erreur: Impossible d'initialiser le client. {e}")
-    exit()
+    sys.stderr.write(f"Error: cannot init Gemini client: {e}\n")
+    sys.exit(1)
 
 # 2. Le PROMPT SYSTÈME et la structure JSON (modèle de donnée)
 # Nous allons utiliser un "schema" pour forcer la structure du JSON.
@@ -88,14 +88,10 @@ def generate_infra_json(query, system_prompt, schema):
         return json.loads(json_string) # Transforme la chaîne JSON en objet Python (dictionnaire)
 
     except Exception as e:
-        print(f"❌ Erreur lors de l'appel API.")
-        print(e)
-        return None
+        sys.stderr.write("Error: Gemini API call failed or invalid JSON output\n")
+        sys.stderr.write(f"{e}\n")
+        sys.exit(1)
 
 # 4. Exécution
 result = generate_infra_json(user_query, SYSTEM_INSTRUCTIONS, json_schema)
-
-if result:
-    # print("\n✅ JSON propre généré avec succès :")
-    # Affiche le résultat joliment formaté
-    print(json.dumps(result, indent=2))
+print(json.dumps(result, indent=2))
