@@ -7,6 +7,7 @@ export default function Home() {
   const [result, setResult] = useState('');
   const [infraJson, setInfraJson] = useState('');
   const [securityResult, setSecurityResult] = useState("");
+  const [terraformStatus, setTerraformStatus] = useState("");
 
   // Action du bouton "Générer"
   const handleGenerate = async () => {
@@ -21,24 +22,29 @@ export default function Home() {
     // Message en attendant la réponse API
     setInfraJson("Analyse en cours...");
     setSecurityResult("Analyse en cours...");
+    setTerraformStatus("Analyse en cours...");
 
     try{
       // Appel de l'API Next.js dans api/gen/route.ts
       const response = await fetch(`/api/gen?phrase=${encodeURIComponent(need)}`)
+
+      if (!response.ok) {
+        throw new Error(`API error ${response.status}`);
+      }
+
       const data = await response.json();
-    
       console.log("Reponse API :", data);
 
-      // Affichage du JSON
-      setInfraJson(JSON.stringify(data.json));
-
-      // Affichage du message de sécurité
+      // Affichage des messages
+      setInfraJson(JSON.stringify(data.json, null, 2));
       setSecurityResult(data.security);
+      setTerraformStatus(data.terraform);
 
     } catch(error) {
       console.error("Erreur durant le process:", error)
-      setInfraJson("Erreur: impossible d'analyser le besoin");
-      setSecurityResult("Erreur: sécurité non évaluée");
+      setInfraJson("Erreur voir la console");
+      setSecurityResult("Erreur");
+      setTerraformStatus("Erreur");
     }
   };
 
@@ -92,6 +98,22 @@ export default function Home() {
             <p className="text-lg whitespace-pre-wrap bg-gray-50 p-6 rounded-lg font-mono">
               { securityResult }
             </p>
+          </div>
+        )}
+
+        {/* { Affichage du statut terraform } */}
+        { terraformStatus && (
+          <div className="mt-6 p-4 bg-gray-100 rounded-lg border border-gray-300">
+            <h3 className="text-xl font-semibold mb-2">Terraform :</h3>
+            <p className="text-lg whitespace-pre-wrap bg-gray-50 p-6 rounded-lg font-mono">
+              { terraformStatus }
+            </p>
+
+            { terraformStatus === "BLOCKED" && (
+              <p className="mt-4 text-lg bg-gray-50 p-6 rounded-lg font-mono">
+                Bloqué par la règle de sécurité.
+              </p>
+            )}
           </div>
         )}
 

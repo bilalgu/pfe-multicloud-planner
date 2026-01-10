@@ -11,58 +11,84 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const phrase = searchParams.get("phrase") || "";
 
+    if (!phrase.trim()) {
+        return NextResponse.json({ error: "Empty phrase" }, { status: 400 });
+    }
+
     try {
         const pythonPath = "PYTHON_PATH";
         const scriptPath = "TEST_SCRIPT_PATH";
         const checkScriptPath = "CHECK_SCRIPT_PATH";
 
         // Exécution du script IA Arlette
-        const { stdout } = await execPromise(
-            `${pythonPath} ${scriptPath} "${phrase}"`
-        );
+        let json: any;
+
+        try {
+        const { stdout } = await execPromise(`${pythonPath} ${scriptPath} "${phrase}"`);
+        json = JSON.parse(stdout);
         console.log(stdout)
-        const json = JSON.parse(stdout);
+        
+        } catch (error: any) {
+            return NextResponse.json( { error: "AI generation failed" }, { status: 502 } ); 
+
+        }
         
         // Sauvegarde du JSON dans un fichier temporaire
         const tmpJson = "/tmp/test-security.json";
         fs.writeFileSync(tmpJson, JSON.stringify(json));
         
         // Exécution du script python sécurité Bilal
-        const { stdout: secOut } = await execPromise(
-            `${pythonPath} ${checkScriptPath} ${tmpJson}`
-        );
+        let sec = "ERROR";
+
+        try {
+
+            const { stdout: secOut } = await execPromise(
+                `${pythonPath} ${checkScriptPath} ${tmpJson}`
+            );
+            sec = secOut.trim(); // "OK" ou "NOT_OK"
+
+        } catch (error: any) {
+
+            if (error?.code === 1) {
+                sec = error.stdout.trim(); // "NOT_OK"
+            }
+            else { throw error; }
+
+        }
+
 
         // Si sécurité ok on génère le fichier Terraform
         let tfStatus = "NOT_GENERATED";
-        if (secOut.includes("OK")) {
-            console.log("Sécurité validée → Génération Terraform...");
+        if (sec === "OK") {
+            console.log("Security OK → generating Terraform");
 
             // Backend de Sira
             const tfScriptPath = "TF_SCRIPT_PATH";
 
-            const { stdout: tfOut } = await execPromise(
-                `${pythonPath} ${tfScriptPath} ${tmpJson}`
-            );
-
+            const { stdout: tfOut } = await execPromise(`${pythonPath} ${tfScriptPath} ${tmpJson}`);
             console.log(tfOut);
-            console.log("Terraform généré avec succès")
+
             tfStatus = "GENERATED";
         }
-        else {
-            // sécurité pas ok on ne génère pas
-            console.log("Sécurité non validée → Pas de génération terraform...")
+        else if (sec === "NOT_OK"){
+            // sécurité pas ok, on ne génère pas du à la sécurité
+            console.log("Security NOT OK → skipping Terraform")
             tfStatus = "BLOCKED";
+        }
+        else {
+            // erreur, on ne génère pas du à l'erreur
+            console.log("Security ERROR");
+            tfStatus = "NOT_GENERATED";
         }
 
         // On renvoie le JSON IA + Résultat Sécurité à l'UI
         return NextResponse.json({
             json,
-            security: secOut.trim(),
+            security: sec,
             terraform: tfStatus
         });
 
     } catch (error: any) {
-        console.error("Erreur API:", error);
         return NextResponse.json({ error: "Failed to process"}, {status: 500});
     }
 }
