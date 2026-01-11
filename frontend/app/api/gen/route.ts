@@ -3,6 +3,9 @@ import { exec } from "child_process";
 import util from "util";
 import fs from "fs";
 
+import path from "path";
+import os from "os";
+
 const execPromise = util.promisify(exec);
 
 // Route API : /api/gen?phrase=...
@@ -16,9 +19,21 @@ export async function GET(request: Request) {
     }
 
     try {
-        const pythonPath = "PYTHON_PATH";
-        const scriptPath = "TEST_SCRIPT_PATH";
-        const checkScriptPath = "CHECK_SCRIPT_PATH";
+        const pythonPath = os.platform() === "win32" ? "python" : "python3";
+
+        const scriptPath = path.resolve(
+            process.cwd(),
+            "..",
+            "backend",
+            "test.py"
+        );
+
+        const checkScriptPath = path.resolve(
+            process.cwd(),
+            "..",
+            "backend",
+            "check.py"
+        );
 
         // Exécution du script IA Arlette
         let json: any;
@@ -34,7 +49,8 @@ export async function GET(request: Request) {
         }
         
         // Sauvegarde du JSON dans un fichier temporaire
-        const tmpJson = "/tmp/test-security.json";
+        const tmpDir = os.tmpdir();
+        const tmpJson = path.join(tmpDir, "test-security.json");
         fs.writeFileSync(tmpJson, JSON.stringify(json));
         
         // Exécution du script python sécurité Bilal
@@ -63,7 +79,12 @@ export async function GET(request: Request) {
             console.log("Security OK → generating Terraform");
 
             // Backend de Sira
-            const tfScriptPath = "TF_SCRIPT_PATH";
+            const tfScriptPath = path.resolve(
+                process.cwd(),
+                "..",
+                "backend",
+                "generate_tf.py"
+            );
 
             const { stdout: tfOut } = await execPromise(`${pythonPath} ${tfScriptPath} ${tmpJson}`);
             console.log(tfOut);
