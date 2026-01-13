@@ -1,4 +1,6 @@
 import sys, json
+import os
+import tempfile
 
 def generate_terraform_code(infrastructure_json):
     """
@@ -185,7 +187,8 @@ with open(json_path) as f:
 tf_code = generate_terraform_code(data)
 
 # Destination provisoire
-output_path = "/tmp/main.tf"
+tmp_dir = tempfile.gettempdir()
+output_path = os.path.join(tmp_dir, "main.tf")
 with open(output_path, "w") as f:
     f.write(tf_code)
 
