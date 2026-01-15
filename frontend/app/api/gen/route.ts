@@ -109,6 +109,7 @@ export async function GET(request: Request) {
             terraform: tfStatus
         });
 
+        
     } catch (error: any) {
         return NextResponse.json({ error: "Failed to process"}, {status: 500});
     }
