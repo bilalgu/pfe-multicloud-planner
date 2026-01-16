@@ -59,7 +59,7 @@ Description
 
 Score de sécurité : A (90-100) | B (75-89) | C (60-74) | D (0-59)
 
-# 📦 Génération de code
+#  Génération de code
 - Terraform : Infrastructure as Code multi-cloud
 - Ansible : Configuration automatisée (firewall, MySQL, Nginx)
 - Toggle interface : Passer facilement entre Terraform et Ansible
