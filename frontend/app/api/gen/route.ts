@@ -1,116 +1,59 @@
-import { NextResponse } from "next/server";
-import { exec } from "child_process";
-import util from "util";
-import fs from "fs";
+import { NextRequest, NextResponse } from 'next/server';
 
-import path from "path";
-import os from "os";
+export async function POST(request: NextRequest) {
+  try {
+    // Récupérer le body de la requête frontend
+    const body = await request.json();
+    
+    console.log('Proxy : Relais vers Flask...');
+    console.log('Description:', body.description?.substring(0, 50) + '...');
+    
+    // APPEL AU BACKEND FLASK
+    const flaskResponse = await fetch('http://localhost:5000/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-const execPromise = util.promisify(exec);
-
-// Route API : /api/gen?phrase=...
-export async function GET(request: Request) {
-
-    const { searchParams } = new URL(request.url);
-    const phrase = searchParams.get("phrase") || "";
-
-    if (!phrase.trim()) {
-        return NextResponse.json({ error: "Empty phrase" }, { status: 400 });
+    // Vérifier si Flask a répondu correctement
+    if (!flaskResponse.ok) {
+      const errorData = await flaskResponse.json().catch(() => ({}));
+      console.error('Erreur Flask:', errorData);
+      
+      return NextResponse.json(
+        { error: errorData.error || 'Erreur backend Flask' },
+        { status: flaskResponse.status }
+      );
     }
 
-    try {
-        const pythonPath = os.platform() === "win32" ? "python" : "python3";
+    // Récupérer la réponse de Flask
+    const data = await flaskResponse.json();
+    console.log('Flask a répondu avec succès');
+    console.log('Infrastructure:', data.infrastructure);
+    
+    // Renvoyer la réponse au frontend
+    return NextResponse.json(data);
+    
+  } catch (error: any) {
+    console.error( 'Erreur proxy:', error.message);
+    
+    return NextResponse.json(
+      { 
+        error: error.message || 'Erreur serveur Next.js',
+        details: 'Vérifiez que le backend Flask tourne sur http://localhost:5000'
+      },
+      { status: 500 }
+    );
+  }
+}
 
-        const scriptPath = path.resolve(
-            process.cwd(),
-            "..",
-            "backend",
-            "test.py"
-        );
-
-        const checkScriptPath = path.resolve(
-            process.cwd(),
-            "..",
-            "backend",
-            "check.py"
-        );
-
-        // Exécution du script IA Arlette
-        let json: any;
-
-        try {
-        const { stdout } = await execPromise(`${pythonPath} ${scriptPath} "${phrase}"`);
-        json = JSON.parse(stdout);
-        console.log(stdout)
-        
-        } catch (error: any) {
-            return NextResponse.json( { error: "AI generation failed" }, { status: 502 } ); 
-
-        }
-        
-        // Sauvegarde du JSON dans un fichier temporaire
-        const tmpDir = os.tmpdir();
-        const tmpJson = path.join(tmpDir, "test-security.json");
-        fs.writeFileSync(tmpJson, JSON.stringify(json));
-        
-        // Exécution du script python sécurité Bilal
-        let sec = "ERROR";
-
-        try {
-
-            const { stdout: secOut } = await execPromise(
-                `${pythonPath} ${checkScriptPath} ${tmpJson}`
-            );
-            sec = secOut.trim(); // "OK" ou "NOT_OK"
-
-        } catch (error: any) {
-
-            if (error?.code === 1) {
-                sec = error.stdout.trim(); // "NOT_OK"
-            }
-            else { throw error; }
-
-        }
-
-
-        // Si sécurité ok on génère le fichier Terraform
-        let tfStatus = "NOT_GENERATED";
-        if (sec === "OK") {
-            console.log("Security OK → generating Terraform");
-
-            // Backend de Sira
-            const tfScriptPath = path.resolve(
-                process.cwd(),
-                "..",
-                "backend",
-                "generate_tf.py"
-            );
-
-            const { stdout: tfOut } = await execPromise(`${pythonPath} ${tfScriptPath} ${tmpJson}`);
-            console.log(tfOut);
-
-            tfStatus = "GENERATED";
-        }
-        else if (sec === "NOT_OK"){
-            // sécurité pas ok, on ne génère pas du à la sécurité
-            console.log("Security NOT OK → skipping Terraform")
-            tfStatus = "BLOCKED";
-        }
-        else {
-            // erreur, on ne génère pas du à l'erreur
-            console.log("Security ERROR");
-            tfStatus = "NOT_GENERATED";
-        }
-
-        // On renvoie le JSON IA + Résultat Sécurité à l'UI
-        return NextResponse.json({
-            json,
-            security: sec,
-            terraform: tfStatus
-        });
-
-        
-    } catch (error: any) {
-        return NextResponse.json({ error: "Failed to process"}, {status: 500});
-    }
+// Route GET pour tester que l'API fonctionne
+export async function GET() {
+  return NextResponse.json({ 
+    message: 'API Next.js proxy vers Flask',
+    status: 'ok',
+    backend: 'http://localhost:5000/generate'
+  });
 }
