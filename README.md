@@ -74,7 +74,8 @@ pfe-multicloud-planner/
 │   ├── security_rules.py         #  6 règles de sécurité 
 │   ├── requirements.txt          #  Dépendances Python
 │   ├── .env                      #  Template configuration Clé API Gemini
-│   
+│   ├── README.md                 # README du backend
+
 ├── frontend/
 │   └── app/
 │       ├── page.tsx              #  Interface Next.js avec toggle
@@ -83,7 +84,6 @@ pfe-multicloud-planner/
 │               └── route.ts      #  Proxy vers Flask
 ├── .gitignore
 ├── README.md
-└── CHANGELOG.md                  # 📝 Historique des versions
 
 
 # Installation
