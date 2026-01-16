@@ -1,0 +1,93 @@
+ 
+
+Toutes les modifications notables de ce projet seront documentées dans ce fichier.
+
+Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/),
+
+
+ [2.0.0] 
+
+# Refactoring  - Architecture unifiée
+
+#Added (Ajouts)
+- Backend unifié : Consolidation en un seul fichier 'app.py'
+- Module de sécurité : 'security_rules.py' avec 6 règles essentielles
+- Support multi-cloud : AWS, Azure, GCP, OpenStack
+- Génération Ansible: Playbooks automatiques pour configuration
+- Interface améliorée : Toggle Terraform/Ansible dans le frontend
+- Scoring de sécurité : Grades A (90-100), B (75-89), C (60-74), D (0-59)
+- Détection demandes dangereuses: Alertes 
+- Téléchargement fichiers : Export ".tf" et ".yml" directement
+
+
+ Fixed (Corrections)
+- Bug Gemini : Ajout de règles strictes pour éviter l'ajout automatique de ressources
+
+- Fallback NLP : Amélioration de la détection de mots-clés (base de données)
+
+
+ Security (Sécurité)
+-  6 règles de sécurité:
+  1. 'db_no_public_ip' (HIGH) : Bases de données privées
+  2. 'encryption_at_rest' (HIGH) : Chiffrement obligatoire
+  3. 'ssl_required' (HIGH) : SSL/TLS requis
+  4. 'monitoring_enabled' (MEDIUM) : Surveillance active
+  5. 'backup_enabled' (MEDIUM) : Sauvegardes 
+  6. 'no_hardcoded_credentials' (CRITICAL) : Pas de mots de passe hardcodés
+
+# Migration Guide
+
+# v1.0
+python test.py 
+python check.py 
+python generate_tf.py 
+
+# v2.0
+python app.py
+# → API REST sur http://localhost:5000
+# → POST /generate avec description en JSON
+
+
+Version initiale (POC)
+- IA Gemini : Compréhension langage naturel (développé par Arlette)
+- Fichier : 'backend/test.py'
+- Fonctionnalité : Parse phrase → JSON structuré
+- Validation sécurité: Règles (développé par Bilal)
+- Fichier : 'backend/check.py'
+- Fonctionnalité : Vérifie DB publique/privée
+- Génération Terraform : Infrastructure AWS (développé par Sira)
+- Fichier : 'backend/generate_tf.py'
+- Fonctionnalité : JSON → 'main.tf'
+- Interface Next.js : UI basique (développé par Nesrine)
+- Fichier : 'frontend/app/page.tsx'
+- Fonctionnalité : Formulaire + affichage résultats
+
+ Supported
+-Provider: AWS 
+- Ressources : EC2, RDS, VPC basiques
+- Sécurité : 1 règle (DB publique/privée)
+
+ Pipeline v1.0
+
+Phrase → IA (Gemini) → JSON → Sécurité (Python) → Terraform (Python) → main.tf
+
+
+
+# [Unreleased] - Prochaines versions
+
+# Planned (Prévu)
+- Support Kubernetes : EKS (AWS), AKS (Azure), GKE (GCP)
+- Historique** : Sauvegarder les générations précédentes (deja fait par Sira)
+- Validation Terraform: `terraform validate` automatique avant export
+- Analytics : Dashboard des ressources générées
+- 10+ règles de sécurité** : Extension du module security_rules.py
+- Multi-région : Déploiement dans plusieurs régions simultanément
+- Visualisation : Diagramme d'architecture auto-généré
+
+
+
+
+
+
+
+
