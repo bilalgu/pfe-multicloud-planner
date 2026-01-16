@@ -84,7 +84,7 @@ pfe-multicloud-planner/
 │               └── route.ts      #  Proxy vers Flask
 ├── .gitignore
 ├── README.md
-
+└── changelog.md                  # Versions
 
 # Installation
 
