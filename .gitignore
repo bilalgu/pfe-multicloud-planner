@@ -1,3 +1,8 @@
 frontend/.next/
 frontend/node_modules/
 pfe-planner/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python

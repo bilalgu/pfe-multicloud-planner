@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from modules.nlp import extract_infrastructure
 
 app = Flask(__name__)
 CORS(app)
@@ -13,15 +14,13 @@ def generate():
     # Log la phrase recue
     print(f"Phrase recue: {phrase}")
     
-    # Retourne un JSON hardcode pour tester
+    # Extraction via Gemini (remplace le hardcode)
+    infra = extract_infrastructure(phrase)
+    
     return jsonify({
-        "json": {
-            "provider": "aws",
-            "servers": 1,
-            "databases": 0
-        },
-        "security": "OK",
-        "terraform": "Terraform code"
+        "json": infra,
+        "security": "OK",  # hardcode pour l'instant
+        "terraform": "# hardcode Terraform code"  # hardcode pour l'instant
     })
 
 @app.route("/health", methods=["GET"])
