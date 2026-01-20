@@ -56,9 +56,7 @@ def validate_infrastructure(description: str, terraform_code: str) -> dict:
         return {
             "status": "NOT_OK",
             "dangerous_requests": dangerous_requests,
-            "violations": security_report.get('violations', []),
-            "score": security_report['security_score'],
-            "grade": security_report['security_grade']
+            "violations": security_report.get('violations', [])
         }
     
     return {
