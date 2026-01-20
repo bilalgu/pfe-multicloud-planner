@@ -94,18 +94,22 @@ def extract_infrastructure(description: str) -> dict:
         # Methode 1 : structured_data (objet Python direct)
         if hasattr(part, "structured_data") and part.structured_data:
             result = dict(part.structured_data)
-
         # Methode 2 : text (string JSON a parser)
         elif hasattr(part, "text") and part.text:
             result = json.loads(part.text)
-        
         else:
             raise ValueError("Reponse Gemini inexploitable")
         
-        # Validation : si provider est null ou invalide, force aws
+        # Normalisation des donnees
+        # Si provider manquant ou invalide, force aws par defaut
         if not result.get("provider") or result.get("provider") == "null":
             result["provider"] = "aws"
 
+        # Assure infrastructure minimale complete
+        # Un serveur necessite toujours un VPC et un security group sur AWS
+        if result.get("servers", 0) > 0:
+            result["networks"] = max(result.get("networks", 0), 1)
+            result["security_groups"] = max(result.get("security_groups", 0), 1)
         return result
 
     except Exception as e:
