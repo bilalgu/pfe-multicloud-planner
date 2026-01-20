@@ -107,7 +107,7 @@ def extract_infrastructure(description: str) -> dict:
 
         # Assure infrastructure minimale complete
         # Un serveur necessite toujours un VPC et un security group sur AWS
-        if result.get("servers", 0) > 0:
+        if result.get("servers", 0) > 0 or result.get("databases", 0) > 0:
             result["networks"] = max(result.get("networks", 0), 1)
             result["security_groups"] = max(result.get("security_groups", 0), 1)
         return result
