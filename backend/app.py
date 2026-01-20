@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from modules.nlp import extract_infrastructure
 from modules.terraform_gen import generate_terraform
+from modules.security import validate_infrastructure
 
 app = Flask(__name__)
 CORS(app)
@@ -15,17 +16,31 @@ def generate():
     # Log la phrase recue
     print(f"Phrase recue: {phrase}")
     
-    # Extraction via Gemini (remplace le hardcode)
+    # Extraction via Gemini
     infra = extract_infrastructure(phrase)
 
     # Generation Terraform securise
     terraform = generate_terraform(infra)
+
+    # Validation securite complete
+    security = validate_infrastructure(phrase, terraform)
+
+    # Decision finale
+    if security["status"] == "NOT_OK":
+        return jsonify({
+            "json": infra,
+            "security": "NOT_OK",
+            "terraform": "BLOCKED",
+            "security_report": security
+        })
     
     return jsonify({
         "json": infra,
-        "security": "OK",  # hardcode pour l'instant
-        "terraform": terraform
+        "security": "OK",
+        "terraform": terraform,
+        "security_report": security
     })
+
 
 @app.route("/health", methods=["GET"])
 def health():

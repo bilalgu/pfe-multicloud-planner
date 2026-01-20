@@ -113,3 +113,59 @@ def get_secure_settings(provider: str) -> dict:
                 settings.update(provider_settings)
     
     return settings
+
+# ============================================
+# FONCTION : Vérification post-génération
+# ============================================
+
+def check_terraform_security(terraform_code: str) -> dict:
+    """
+    Vérifie le code Terraform contre les 6 politiques
+    """
+    violations = []
+    passed = []
+    
+    for policy_id, policy in SECURITY_POLICIES.items():
+        if "check" in policy:
+            try:
+                if policy["check"](terraform_code):
+                    passed.append(policy_id)
+                else:
+                    violations.append({
+                        "rule": policy_id,
+                        "name": policy["name"],
+                        "severity": policy["severity"],
+                        "category": policy["category"],
+                        "message": f"  {policy['name']}",
+                        "description": policy["description"],
+                        "recommendation": f"Solution : {policy['description']}"
+                    })
+            except Exception as e:
+                print(f"  Erreur vérification {policy_id}: {e}")
+    
+    if not violations:
+        score = 100
+    else:
+        penalty_map = {"CRITICAL": 30, "HIGH": 20, "MEDIUM": 10}
+        penalties = sum(penalty_map.get(v["severity"], 10) for v in violations)
+        score = max(0, 100 - penalties)
+    
+    if score >= 90:
+        grade, status = "A", "Excellent"
+    elif score >= 75:
+        grade, status = "B", "Bon"
+    elif score >= 60:
+        grade, status = "C", "Acceptable"
+    else:
+        grade, status = "D", "Insuffisant"
+    
+    return {
+        "violations": violations,
+        "passed_checks": passed,
+        "total_issues": len(violations),
+        "total_passed": len(passed),
+        "security_score": score,
+        "security_grade": grade,
+        "security_status": status,
+        "policies_checked": len(SECURITY_POLICIES)
+    }
