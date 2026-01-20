@@ -11,8 +11,8 @@ import re
 
 SECURITY_POLICIES = {
     "db_no_public_ip": {
-        "name": "Base de données privée",
-        "description": "Les bases de données ne doivent jamais être accessibles depuis Internet",
+        "name": "Base de donnees privee",
+        "description": "Les bases de donnees ne doivent jamais etre accessibles depuis Internet",
         "severity": "HIGH",
         "category": "Network Access",
         "terraform_settings": {
@@ -26,7 +26,7 @@ SECURITY_POLICIES = {
     
     "encryption_at_rest": {
         "name": "Chiffrement au repos",
-        "description": "Toutes les données doivent être chiffrées au repos",
+        "description": "Les donnees doivent etre chiffrees au repos",
         "severity": "HIGH",
         "category": "Encryption",
         "terraform_settings": {
@@ -40,7 +40,7 @@ SECURITY_POLICIES = {
     
     "ssl_required": {
         "name": "SSL/TLS obligatoire",
-        "description": "Toutes les connexions doivent utiliser SSL/TLS",
+        "description": "Les connexions doivent utiliser SSL/TLS",
         "severity": "HIGH",
         "category": "Encryption",
         "terraform_settings": {
@@ -54,7 +54,7 @@ SECURITY_POLICIES = {
     
     "monitoring_enabled": {
         "name": "Surveillance active",
-        "description": "La surveillance et les logs doivent être activés",
+        "description": "La surveillance et les logs doivent etre actives",
         "severity": "MEDIUM",
         "category": "Monitoring",
         "terraform_settings": {
@@ -68,7 +68,7 @@ SECURITY_POLICIES = {
     
     "backup_enabled": {
         "name": "Sauvegardes automatiques",
-        "description": "Les sauvegardes doivent être configurées",
+        "description": "Les sauvegardes doivent etre configurees",
         "severity": "MEDIUM",
         "category": "Backup & Recovery",
         "terraform_settings": {
@@ -82,7 +82,7 @@ SECURITY_POLICIES = {
     
     "no_hardcoded_credentials": {
         "name": "Pas de credentials en dur",
-        "description": "Les mots de passe ne doivent jamais être hardcodés",
+        "description": "Les mots de passe ne doivent jamais etre hardcodes",
         "severity": "CRITICAL",
         "category": "Identity & Access",
         "terraform_settings": {
@@ -120,7 +120,7 @@ def get_secure_settings(provider: str) -> dict:
 
 def check_terraform_security(terraform_code: str) -> dict:
     """
-    Vérifie le code Terraform contre les 6 politiques
+    Verifie le code Terraform contre les 6 politiques
     """
     violations = []
     passed = []
@@ -133,15 +133,12 @@ def check_terraform_security(terraform_code: str) -> dict:
                 else:
                     violations.append({
                         "rule": policy_id,
-                        "name": policy["name"],
                         "severity": policy["severity"],
                         "category": policy["category"],
-                        "message": f"  {policy['name']}",
-                        "description": policy["description"],
-                        "recommendation": f"Solution : {policy['description']}"
+                        "description": policy["description"]
                     })
             except Exception as e:
-                print(f"  Erreur vérification {policy_id}: {e}")
+                print(f"  Erreur verification {policy_id}: {e}")
     
     if not violations:
         score = 100
