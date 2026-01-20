@@ -52,10 +52,16 @@ def validate_infrastructure(description: str, terraform_code: str) -> dict:
     # Blocage si :
     # - Demandes dangereuses detectees OU
     # - Score de securite < 70
-    if dangerous_requests or security_report['security_score'] < 70:
+    if dangerous_requests:
         return {
             "status": "NOT_OK",
-            "dangerous_requests": dangerous_requests,
+            "dangerous_requests": dangerous_requests
+        }
+
+    # Sinon, verifier le score du code genere
+    if security_report['security_score'] < 70:
+        return {
+            "status": "NOT_OK",
             "violations": security_report.get('violations', [])
         }
     
