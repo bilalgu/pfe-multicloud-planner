@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from modules.nlp import extract_infrastructure
+from modules.terraform_gen import generate_terraform
 
 app = Flask(__name__)
 CORS(app)
@@ -16,11 +17,14 @@ def generate():
     
     # Extraction via Gemini (remplace le hardcode)
     infra = extract_infrastructure(phrase)
+
+    # Generation Terraform securise
+    terraform = generate_terraform(infra)
     
     return jsonify({
         "json": infra,
         "security": "OK",  # hardcode pour l'instant
-        "terraform": "# hardcode Terraform code"  # hardcode pour l'instant
+        "terraform": terraform
     })
 
 @app.route("/health", methods=["GET"])

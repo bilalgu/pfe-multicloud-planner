@@ -93,13 +93,20 @@ def extract_infrastructure(description: str) -> dict:
 
         # Methode 1 : structured_data (objet Python direct)
         if hasattr(part, "structured_data") and part.structured_data:
-            return dict(part.structured_data)
+            result = dict(part.structured_data)
 
         # Methode 2 : text (string JSON a parser)
-        if hasattr(part, "text") and part.text:
-            return json.loads(part.text)
+        elif hasattr(part, "text") and part.text:
+            result = json.loads(part.text)
+        
+        else:
+            raise ValueError("Reponse Gemini inexploitable")
+        
+        # Validation : si provider est null ou invalide, force aws
+        if not result.get("provider") or result.get("provider") == "null":
+            result["provider"] = "aws"
 
-        raise ValueError("Reponse Gemini inexploitable")
+        return result
 
     except Exception as e:
         # Fallback basique si Gemini echoue
