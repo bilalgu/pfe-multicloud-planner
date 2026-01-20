@@ -10,8 +10,27 @@ CORS(app)
 @app.route("/generate", methods=["POST"])
 def generate():
     # Recupere le JSON de la requete
-    data = request.get_json()
-    phrase = data.get("description", "")
+    try:
+        data = request.get_json()
+        if data is None:
+            return jsonify({
+                "error": "JSON invalide",
+                "message": "Le corps de la requete doit etre un JSON valide"
+            }), 400
+    except Exception as e:
+        return jsonify({
+            "error": "JSON invalide",
+            "message": f"{str(e)}"
+        }), 400
+    
+    phrase = data.get("description", "").strip()
+
+    # Validation : phrase non vide
+    if not phrase:
+        return jsonify({
+            "error": "Description vide",
+            "message": "Veuillez fournir une description d'infrastructure"
+        }), 400
     
     # Log la phrase recue
     print(f"Phrase recue: {phrase}")
