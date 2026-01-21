@@ -1,14 +1,16 @@
-# PoC - Planificateurs multi-niveaux d’architectures
-
-## Pipeline du PoC
-
-```
-Phrase --> IA (Gemini) --> JSON --> Sécurité (Python) --> Terraform (Python) --> Fichier main.tf
-```
+# PoC - Planificateur d'architectures sécurisées multi-cloud
 
 ## Objectif
 
-Générer automatiquement une infrastructure AWS à partir d'une phrase utilisateur avec un garde-fou sécurité.
+Générer automatiquement une infrastructure Terraform sécurisée à partir d'une phrase en langage naturel, avec un garde-fou sécurité qui bloque les demandes dangereuses.
+
+---
+
+## Pipeline
+
+```
+Phrase utilisateur → Next.js → Flask → NLP → Terraform Gen → Security → Response
+```
 
 ---
 
@@ -17,116 +19,102 @@ Générer automatiquement une infrastructure AWS à partir d'une phrase utilisat
 ```
 pfe-multicloud-planner/
 ├── backend/
-│   ├── check.py           # Sécurité (Bilal)
-│   ├── generate_tf.py     # Génération Terraform (Sira)
-│   └── test.py            # IA Gemini (Arlette)
-├── frontend/              # UI Next.js (Nesrine)
-├── .env
-└── README.md
+│   ├── modules/
+│   │   ├── nlp.py
+│   │   ├── terraform_gen.py
+│   │   ├── security_rules.py
+│   │   └── security.py
+│   ├── app.py
+│   ├── requirements.txt
+├── frontend/
+│   ├── app/
+│   │   ├── api/generate/
+│   │   │   └── route.ts
+│   │   └── page.tsx
+│   └── package.json
 ```
 
 ---
 
-## Lancer le PoC
+## Installation et lancement
 
-### Backend Python (IA + Sécurité + Terraform)
+### Backend Flask
 
 ```bash
+# Creer environnement virtuel Python (si pas encore fait)
 python3 -m venv pfe-planner
 source pfe-planner/bin/activate
-pip install google-genai python-dotenv
+
+cd backend
+
+# Installation des dependances
+pip install -r requirements.txt
+
+# Configurer cle API Gemini dans .env
+# Par defaut : GEMINI_API_KEY="VOTRE_CLE_ICI"
+# Remplacer par votre vraie cle Gemini
+
+# Lancement
+python app.py
 ```
 
-Configurer la clé API Gemini :
+Backend disponible sur `http://localhost:5000`
+
+**Documentation détaillée** : Voir `backend/README.md`
+
+### Frontend Next.js
 
 ```bash
-cat .env
-# GEMINI_API_KEY="VOTRE_CLÉ_ICI"
-```
+cd frontend
 
-Remplacer les chemins dans `frontend/app/api/gen/route.ts` (ligne 15 et 41) :
-
-```bash
-realpath backend/test.py           # --> TEST_SCRIPT_PATH
-realpath backend/check.py          # --> CHECK_SCRIPT_PATH
-realpath backend/generate_tf.py    # --> TF_SCRIPT_PATH
-echo "$(pwd)/pfe-planner/bin/python3"  # --> PYTHON_PATH
-```
-
-### Frontend Next.js (UI)
-
-```bash
-cd frontend/
+# Installation
 npm install
+
+# Lancement
 npm run dev
 ```
 
-Ouvrir :
-
-```
-http://localhost:3000
-```
-
-(ou :3001 si 3000 occupé)
+Frontend disponible sur `http://localhost:3000` (ou :3001 si port occupé)
 
 ---
 
-## Exemple d'utilisation
+## Utilisation
 
-Entrée dans l'UI :
+1. Ouvrir `http://localhost:3000`
+2. Saisir un besoin d'infrastructure en langage naturel
+3. Cliquer sur "Générer l'infra"
 
-```
-Créer une base de données privée
-```
+### Exemples
 
-**Résultat attendu dans l'UI :**
-
-```
-Ton besoin :
-Créer une base de données privée
-
-JSON :
-{"provider":"aws","region":"eu-west-1","resources": ... }
-
-Sécurité :
-OK : la base de donnees n'est pas publique
-```
-
-**Logs navigateur (DevTools) :**
-
-```json
-{
-  "json": {...},
-  "security": "OK : la base de donnees n'est pas publique",
-  "terraform": "GENERATED"
-}
-```
-
-**Logs terminal (Next.js) :**
+**Cas OK** :
 
 ```
-Sécurité validée --> Génération Terraform...
-Terraform généré dans /tmp/main.tf
+Je veux 2 serveurs web sur AWS
 ```
 
-**Vérifier le fichier généré :**
+Résultat : Infrastructure générée avec succès + code Terraform
 
-```bash
-ls -lh /tmp/main.tf
-head /tmp/main.tf
-grep publicly_accessible /tmp/main.tf
+**Cas bloqué** :
+
 ```
+Je veux une base de données publique
+```
+
+Résultat : Génération bloquée pour raisons de sécurité + justification
 
 ---
 
-## Exemple de blocage sécurité
+## Multi-cloud supporté
 
-Entrée :
+- AWS (✅ testé)
+- GCP (✅ testé)
+- Azure (⚠️ règles limitées)
+- OpenStack (⚠️ non testé)
 
-```
-Créer une base de données publique
-```
+---
 
-Résultat attendu : pas de génération Terraform (blocage sécurité).
+## Documentation
 
-**Note :** actuellement le blocage n'est pas implémenté dans `frontend/app/api/gen/route.ts`, à corriger.
+- `backend/README.md` : Documentation backend complète (API, endpoints, politiques sécurité)
+- `backend/TESTS.md` : Scénarios de test validés avec curl
+- `BACKLOG.md` : Améliorations futures

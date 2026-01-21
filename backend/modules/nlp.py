@@ -115,7 +115,7 @@ def extract_infrastructure(description: str) -> dict:
     except Exception as e:
         # Fallback basique si Gemini echoue
         # Retourne une config AWS minimale par defaut
-        print(f"Gemini fallback: {e}")
+        print(f"Gemini fallback: {repr(e)}")
         return {
             "provider": "aws",
             "servers": 1,
