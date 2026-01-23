@@ -80,7 +80,7 @@ SECURITY_POLICIES = {
             "gcp": {"backup_enabled": True, "backup_start_time": "03:00"},
             "openstack": {"backup_enabled": True}
         },
-        "check": lambda code: "backup" in code.lower()
+        "check": lambda code, provider=None: "backup" in code.lower()
     },
     
     "no_hardcoded_credentials": {
@@ -91,7 +91,7 @@ SECURITY_POLICIES = {
         "terraform_settings": {
             "description": "Utiliser des variables sensibles"
         },
-        "check": lambda code: not any(
+        "check": lambda code, provider=None: not any(
             pattern in code
             for pattern in ['password = "', 'secret = "', 'api_key = "']
         )
