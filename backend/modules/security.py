@@ -46,7 +46,19 @@ def validate_infrastructure(description: str, terraform_code: str) -> dict:
     dangerous_requests = detect_dangerous_requests(description)
     
     # Etape 2 : Verification du code Terraform genere
-    security_report = check_terraform_security(terraform_code)
+    # Détecte le provider depuis le code Terraform
+    provider = None
+    terraform_lower = terraform_code.lower()
+    if 'provider "aws"' in terraform_lower or 'hashicorp/aws' in terraform_lower:
+        provider = "aws"
+    elif 'provider "azurerm"' in terraform_lower or 'hashicorp/azurerm' in terraform_lower:
+        provider = "azure"
+    elif 'provider "google"' in terraform_lower or 'hashicorp/google' in terraform_lower:
+        provider = "gcp"
+    elif 'provider "openstack"' in terraform_lower:
+        provider = "openstack"
+    
+    security_report = check_terraform_security(terraform_code, provider)
     
     # Etape 3 : Decision binaire
     # Blocage si :

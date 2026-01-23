@@ -329,6 +329,179 @@ resource "google_compute_instance" "server_{i+1}" {{
 
 """
     
+    # Load Balancers - Multi-cloud
+    load_balancers = infra.get("load_balancers", 0)
+    for i in range(load_balancers):
+        if provider == "aws":
+            code += f"""# Load Balancer {i+1} (AWS)
+resource "aws_lb" "lb_{i+1}" {{
+  name               = "lb-{i+1}"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.sg_1.id]
+  subnets            = [aws_subnet.private.id]
+  
+  enable_deletion_protection = false
+  
+  tags = {{
+    Name        = "lb-{i+1}"
+    Environment = "production"
+  }}
+}}
+
+resource "aws_lb_target_group" "tg_{i+1}" {{
+  name     = "tg-{i+1}"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+  
+  health_check {{
+    enabled             = true
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    protocol            = "HTTP"
+  }}
+  
+  tags = {{
+    Name = "tg-{i+1}"
+  }}
+}}
+
+resource "aws_lb_listener" "listener_{i+1}" {{
+  load_balancer_arn = aws_lb.lb_{i+1}.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS-1-2-2017-01"
+  certificate_arn   = var.ssl_certificate_arn
+  
+  default_action {{
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg_{i+1}.arn
+  }}
+}}
+
+"""
+        elif provider == "azure":
+            code += f"""# Load Balancer {i+1} (Azure)
+resource "azurerm_public_ip" "lb_ip_{i+1}" {{
+  name                = "lb-ip-{i+1}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  
+  tags = {{
+    Environment = "production"
+  }}
+}}
+
+resource "azurerm_lb" "lb_{i+1}" {{
+  name                = "lb-{i+1}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  sku                 = "Standard"
+  
+  frontend_ip_configuration {{
+    name                 = "PublicIPAddress"
+    public_ip_address_id = azurerm_public_ip.lb_ip_{i+1}.id
+  }}
+  
+  tags = {{
+    Environment = "production"
+  }}
+}}
+
+resource "azurerm_lb_backend_address_pool" "backend_pool_{i+1}" {{
+  name            = "BackEndAddressPool"
+  loadbalancer_id = azurerm_lb.lb_{i+1}.id
+}}
+
+resource "azurerm_lb_probe" "probe_{i+1}" {{
+  name            = "http-probe"
+  loadbalancer_id = azurerm_lb.lb_{i+1}.id
+  port            = 80
+  protocol        = "Http"
+  request_path    = "/"
+}}
+
+resource "azurerm_lb_rule" "rule_{i+1}" {{
+  name                           = "LBRule"
+  loadbalancer_id                = azurerm_lb.lb_{i+1}.id
+  probe_id                       = azurerm_lb_probe.probe_{i+1}.id
+  backend_address_pool_ids       = [azurerm_lb_backend_address_pool.backend_pool_{i+1}.id]
+  frontend_ip_configuration_name = "PublicIPAddress"
+  protocol                       = "Tcp"
+  frontend_port                  = 443
+  backend_port                   = 80
+}}
+
+"""
+        elif provider == "gcp":
+            code += f"""# Load Balancer {i+1} (GCP)
+resource "google_compute_backend_service" "backend_{i+1}" {{
+  name                  = "backend-{i+1}"
+  protocol              = "HTTP"
+  port_name             = "http"
+  timeout_sec           = 30
+  enable_cdn            = false
+  load_balancing_scheme = "EXTERNAL"
+  
+  health_checks = [google_compute_health_check.health_check_{i+1}.id]
+  
+  backend {{
+    group = google_compute_instance_group.instance_group_{i+1}.id
+  }}
+}}
+
+resource "google_compute_health_check" "health_check_{i+1}" {{
+  name               = "health-check-{i+1}"
+  check_interval_sec = 10
+  timeout_sec        = 5
+  healthy_threshold = 2
+  
+  http_health_check {{
+    port         = 80
+    request_path = "/"
+  }}
+}}
+
+resource "google_compute_instance_group" "instance_group_{i+1}" {{
+  name        = "instance-group-{i+1}"
+  description = "Instance group for load balancer"
+  zone        = "{config["zone"]}"
+  
+  instances = [
+    google_compute_instance.server_1.id
+  ]
+  
+  named_port {{
+    name = "http"
+    port = 80
+  }}
+}}
+
+resource "google_compute_url_map" "url_map_{i+1}" {{
+  name            = "url-map-{i+1}"
+  default_service = google_compute_backend_service.backend_{i+1}.id
+}}
+
+resource "google_compute_target_https_proxy" "https_proxy_{i+1}" {{
+  name             = "https-proxy-{i+1}"
+  url_map          = google_compute_url_map.url_map_{i+1}.id
+  ssl_certificates = [var.gcp_ssl_certificate_id]
+}}
+
+resource "google_compute_global_forwarding_rule" "forwarding_rule_{i+1}" {{
+  name       = "forwarding-rule-{i+1}"
+  target     = google_compute_target_https_proxy.https_proxy_{i+1}.id
+  port_range = "443"
+}}
+
+"""
+    
     # Bases de donnees - Multi-cloud avec politiques de securite
     for i in range(databases):
         # Recupere les parametres securises
@@ -444,6 +617,23 @@ variable "db_password" {
   description = "Mot de passe base de donnees"
   type        = string
   sensitive   = true
+}
+
+"""
+    
+    # Variables pour load balancers
+    if load_balancers > 0:
+        if provider == "aws":
+            code += """variable "ssl_certificate_arn" {
+  description = "ARN du certificat SSL pour le load balancer"
+  type        = string
+}
+
+"""
+        elif provider == "gcp":
+            code += """variable "gcp_ssl_certificate_id" {
+  description = "ID du certificat SSL GCP"
+  type        = string
 }
 
 """
