@@ -20,39 +20,66 @@ Phrase utilisateur → Next.js → Flask → NLP → Terraform Gen → Security 
 pfe-multicloud-planner/
 ├── backend/
 │   ├── modules/
-│   │   ├── nlp.py
-│   │   ├── terraform_gen.py
-│   │   ├── security_rules.py
-│   │   └── security.py
-│   ├── app.py
-│   ├── requirements.txt
+│   │   ├── nlp.py              # Extraction NLP avec Gemini AI
+│   │   ├── terraform_gen.py    # Génération Terraform multi-cloud
+│   │   ├── security_rules.py   # Règles de sécurité par provider
+│   │   └── security.py         # Validation sécurité
+│   ├── tests/                  # Tests unitaires (pytest)
+│   │   ├── test_api.py
+│   │   ├── test_nlp.py
+│   │   ├── test_security.py
+│   │   └── test_terraform_gen.py
+│   ├── app.py                  # API Flask
+│   └── requirements.txt
 ├── frontend/
 │   ├── app/
-│   │   ├── api/generate/
-│   │   │   └── route.ts
-│   │   └── page.tsx
-│   └── package.json
+│   │   ├── api
+│   │   │   └── generate/
+│   │   │       └── route.ts    # Proxy Next.js → Flask
+│   │   ├── compone/nts/         # Composants UI
+│   │   └── page.tsx            # Page principale
+├── scripts/
+│   ├── setup.sh                # Setup automatique
+│   └── dev.sh                  # Lancement dev
 ```
 
 ---
 
 ## Installation et lancement
 
-### Backend Flask
+### Méthode rapide (recommandée)
 
 ```bash
-# Creer environnement virtuel Python (si pas encore fait)
-python3 -m venv pfe-planner
-source pfe-planner/bin/activate
+# Setup automatique complet
+make setup
 
+# Lancer backend et frontend en parallèle
+make dev
+```
+
+Ou avec le script shell :
+```bash
+./scripts/setup.sh
+./scripts/dev.sh
+```
+
+### Méthode manuelle
+
+#### Backend Flask
+
+```bash
 cd backend
 
-# Installation des dependances
+# Créer environnement virtuel Python
+python3 -m venv venv
+source venv/bin/activate  # Sur Windows: venv\Scripts\activate
+
+# Installation des dépendances
 pip install -r requirements.txt
 
-# Configurer cle API Gemini dans .env
-# Par defaut : GEMINI_API_KEY="VOTRE_CLE_ICI"
-# Remplacer par votre vraie cle Gemini
+# Configurer clé API Gemini dans .env
+cp .env.example .env
+# Éditer .env et ajouter GEMINI_API_KEY ou mettre AI_MODE=mock
 
 # Lancement
 python app.py
@@ -60,9 +87,7 @@ python app.py
 
 Backend disponible sur `http://localhost:5000`
 
-**Documentation détaillée** : Voir `backend/README.md`
-
-### Frontend Next.js
+#### Frontend Next.js
 
 ```bash
 cd frontend
@@ -75,6 +100,19 @@ npm run dev
 ```
 
 Frontend disponible sur `http://localhost:3000` (ou :3001 si port occupé)
+
+### Commandes Make disponibles
+
+```bash
+make help           # Afficher toutes les commandes
+make setup          # Setup complet (backend + frontend)
+make install        # Installer toutes les dépendances
+make dev            # Lancer backend et frontend
+make test           # Lancer tous les tests
+make clean          # Nettoyer fichiers générés
+```
+
+**Documentation détaillée** : Voir `backend/README.md` et `CONTRIBUTING.md`
 
 ---
 
@@ -106,10 +144,10 @@ Résultat : Génération bloquée pour raisons de sécurité + justification
 
 ## Multi-cloud supporté
 
-- AWS (✅ testé)
-- GCP (✅ testé)
-- Azure (⚠️ règles limitées)
-- OpenStack (⚠️ non testé)
+- AWS (testé)
+- GCP (testé)
+- Azure (règles limitées)
+- OpenStack (non testé)
 
 ---
 
@@ -117,4 +155,7 @@ Résultat : Génération bloquée pour raisons de sécurité + justification
 
 - `backend/README.md` : Documentation backend complète (API, endpoints, politiques sécurité)
 - `backend/TESTS.md` : Scénarios de test validés avec curl
+- `CONTRIBUTING.md` : Guide de contribution et développement
 - `BACKLOG.md` : Améliorations futures
+- `Makefile`: Commandes Make
+- `CHANGELOG.md` : Historique des changements

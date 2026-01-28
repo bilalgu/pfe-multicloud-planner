@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import ErrorToast from './components/ErrorToast';
+import SuccessToast from './components/SuccessToast';
+import LoadingSpinner from './components/LoadingSpinner';
 
 interface InfrastructureResult {
   success: boolean;
@@ -36,10 +39,19 @@ export default function Home() {
   const [result, setResult] = useState<InfrastructureResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Auto-close toast après 5 secondes
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
 
   const handleGenerate = async () => {
     if (!need.trim()) {
-      alert('Décris ton besoin d\'infrastructure !');
+      setToast({ type: 'error', message: 'Décris ton besoin d\'infrastructure !' });
       return;
     }
 
@@ -63,8 +75,15 @@ export default function Home() {
       const data = await response.json();
       console.log('Réponse backend:', data);
       setResult(data);
+      if (data.success) {
+        setToast({ type: 'success', message: 'Infrastructure générée avec succès !' });
+      } else {
+        setToast({ type: 'error', message: 'Génération bloquée pour raisons de sécurité' });
+      }
     } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue');
+      const errorMessage = err.message || 'Une erreur est survenue';
+      setError(errorMessage);
+      setToast({ type: 'error', message: errorMessage });
       console.error('Erreur:', err);
     } finally {
       setLoading(false);
@@ -75,11 +94,11 @@ export default function Home() {
     if (result?.terraform_code) {
       navigator.clipboard.writeText(result.terraform_code)
         .then(() => {
-          alert('Code Terraform copié dans le presse-papier !');
+          setToast({ type: 'success', message: 'Code Terraform copié dans le presse-papier !' });
         })
         .catch((err) => {
           console.error('Erreur lors de la copie:', err);
-          alert('Impossible de copier. Essayez manuellement.');
+          setToast({ type: 'error', message: 'Impossible de copier. Essayez manuellement.' });
         });
     }
   };
@@ -96,16 +115,23 @@ export default function Home() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        alert('Fichier main.tf téléchargé avec succès !');
+        setToast({ type: 'success', message: 'Fichier main.tf téléchargé avec succès !' });
       } catch (err) {
         console.error('Erreur lors du téléchargement:', err);
-        alert('Impossible de télécharger le fichier.');
+        setToast({ type: 'error', message: 'Impossible de télécharger le fichier.' });
       }
     }
   };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
+      {toast && (
+        toast.type === 'error' ? (
+          <ErrorToast message={toast.message} onClose={() => setToast(null)} />
+        ) : (
+          <SuccessToast message={toast.message} onClose={() => setToast(null)} />
+        )
+      )}
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
           Planificateur d'architectures sécurisées multi-cloud
@@ -130,7 +156,9 @@ export default function Home() {
           {loading ? 'Génération...' : 'Générer l\'infra'}
         </button>
 
-        {error && (
+        {loading && <LoadingSpinner />}
+
+        {error && !loading && (
           <div className="mt-8 p-6 bg-red-100 border-2 border-red-400 text-red-700 rounded-xl">
             <strong>Erreur :</strong> {error}
           </div>

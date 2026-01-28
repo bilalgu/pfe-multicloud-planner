@@ -128,7 +128,7 @@ curl -X POST http://localhost:5000/generate \
 
 | Provider  | Status        | Score typique | Note                                             |
 | --------- | ------------- | ------------- | ------------------------------------------------ |
-| AWS       | ✅ Teste       | 70-80         | Completement fonctionnel                         |
-| GCP       | ✅ Teste       | 70            | Completement fonctionnel                         |
-| Azure     | ⚠️ Syntaxe OK | 40            | Regles verification trop strictes (`BACKLOG.md`) |
-| OpenStack | ⚠️ Non teste  | -             | Syntaxe implementee, non valide                  |
+| AWS       | Teste       | 70-80         | Completement fonctionnel                         |
+| GCP       | Teste       | 70            | Completement fonctionnel                         |
+| Azure     | Syntaxe OK | 40            | Regles verification trop strictes (`BACKLOG.md`) |
+| OpenStack | Non teste  | -             | Syntaxe implementee, non valide                  |

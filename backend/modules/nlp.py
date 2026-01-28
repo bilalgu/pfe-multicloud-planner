@@ -1,17 +1,31 @@
 import os
 import json
+import logging
+import threading
+from typing import Optional
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from pydantic import BaseModel, Field, field_validator
+from contextlib import contextmanager
 
 load_dotenv()
 
-# Initialise le client Gemini
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("GEMINI_API_KEY manquante dans .env")
+# Configuration logging
+logger = logging.getLogger(__name__)
 
-client = genai.Client(api_key=api_key)
+# Mode mock pour développement
+AI_MODE = os.getenv("AI_MODE", "real").lower()
+
+# Initialise le client Gemini (seulement si mode réel)
+client = None
+if AI_MODE == "real":
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY manquante dans .env")
+    client = genai.Client(api_key=api_key)
+elif AI_MODE == "mock":
+    logger.info("Mode MOCK activé - utilisation de données fictives")
 
 # Schema JSON structure - definit le format attendu
 json_schema = types.Schema(
@@ -61,66 +75,213 @@ SYSTEM_INSTRUCTIONS = (
     "Demande: 'Une base de donnees' -> {servers: 0, databases: 1, load_balancers: 0}\n"
 )
 
+# Modèle Pydantic pour validation
+class InfrastructureSchema(BaseModel):
+    """Schéma de validation pour la structure d'infrastructure"""
+    provider: str = Field(..., description="Provider cloud")
+    servers: int = Field(..., ge=0, description="Nombre de serveurs")
+    databases: int = Field(..., ge=0, description="Nombre de bases de données")
+    networks: int = Field(..., ge=0, description="Nombre de réseaux")
+    load_balancers: int = Field(..., ge=0, description="Nombre de load balancers")
+    security_groups: int = Field(..., ge=0, description="Nombre de security groups")
+    
+    @field_validator('provider')
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        valid_providers = ['aws', 'azure', 'gcp', 'openstack']
+        v_lower = v.lower()
+        if v_lower not in valid_providers:
+            logger.warning(f"Provider invalide '{v}', utilisation de 'aws' par défaut")
+            return 'aws'
+        return v_lower
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "provider": "aws",
+                "servers": 1,
+                "databases": 0,
+                "networks": 1,
+                "load_balancers": 0,
+                "security_groups": 1
+            }
+        }
+
+
+# Timeout context manager (compatible multiplateforme)
+class TimeoutError(Exception):
+    """Exception levée lors d'un timeout"""
+    pass
+
+
+@contextmanager
+def timeout(seconds: int):
+    """Context manager pour timeout sur opérations (compatible multiplateforme)"""
+    timer = None
+    timeout_occurred = threading.Event()
+    
+    def timeout_handler():
+        timeout_occurred.set()
+    
+    timer = threading.Timer(seconds, timeout_handler)
+    timer.start()
+    
+    try:
+        yield
+    except Exception as e:
+        if timeout_occurred.is_set():
+            raise TimeoutError(f"Opération timeout après {seconds} secondes")
+        raise
+    finally:
+        if timer:
+            timer.cancel()
+        if timeout_occurred.is_set():
+            raise TimeoutError(f"Opération timeout après {seconds} secondes")
+
+
+def mock_extract_infrastructure(description: str) -> dict:
+    """Extraction mock pour développement sans API"""
+    logger.info(f"Mode MOCK: extraction depuis '{description[:50]}...'")
+    
+    # Parser simple basé sur mots-clés
+    desc_lower = description.lower()
+    
+    # Détection provider
+    provider = "aws"
+    if "azure" in desc_lower:
+        provider = "azure"
+    elif "gcp" in desc_lower or "google" in desc_lower:
+        provider = "gcp"
+    elif "openstack" in desc_lower:
+        provider = "openstack"
+    
+    # Détection serveurs
+    servers = 0
+    for word in desc_lower.split():
+        if word.isdigit():
+            servers = int(word)
+            break
+    if servers == 0 and any(word in desc_lower for word in ["serveur", "server", "vm", "instance"]):
+        servers = 1
+    
+    # Détection databases
+    databases = 0
+    if any(word in desc_lower for word in ["database", "db", "base", "mysql", "postgresql"]):
+        databases = 1
+    
+    # Détection load balancers
+    load_balancers = 0
+    if any(word in desc_lower for word in ["load balancer", "loadbalancer", "lb"]):
+        load_balancers = 1
+    
+    # Infrastructure minimale
+    networks = 1 if servers > 0 or databases > 0 else 0
+    security_groups = 1 if servers > 0 or databases > 0 else 0
+    
+    return {
+        "provider": provider,
+        "servers": servers,
+        "databases": databases,
+        "networks": networks,
+        "load_balancers": load_balancers,
+        "security_groups": security_groups
+    }
+
 
 def extract_infrastructure(description: str) -> dict:
     """
-    Phrase utilisateur -> JSON structure via Gemini
-    Retourne un dictionnaire avec provider, servers, databases, etc.
+    Phrase utilisateur -> JSON structure via Gemini (ou mock)
+    Retourne un dictionnaire validé avec provider, servers, databases, etc.
+    
+    Args:
+        description: Description de l'infrastructure en langage naturel
+        
+    Returns:
+        dict: Structure d'infrastructure validée
+        
+    Raises:
+        ValueError: Si le JSON généré est invalide
+        TimeoutError: Si l'appel Gemini dépasse le timeout
     """
+    # Mode mock pour développement
+    if AI_MODE == "mock":
+        result = mock_extract_infrastructure(description)
+        try:
+            # Validation avec Pydantic
+            validated = InfrastructureSchema(**result)
+            return validated.model_dump()
+        except Exception as e:
+            logger.error(f"Erreur validation mode mock: {e}")
+            raise ValueError(f"Erreur validation JSON mock: {str(e)}")
+    
+    # Mode réel avec Gemini
+    if not client:
+        raise ValueError("Client Gemini non initialisé")
+    
     try:
-        # Configure Gemini pour forcer le format JSON
-        config = types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=json_schema,
-            system_instruction=SYSTEM_INSTRUCTIONS,
-        )
+        # Timeout de 30 secondes
+        with timeout(30):
+            # Configure Gemini pour forcer le format JSON
+            config = types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=json_schema,
+                system_instruction=SYSTEM_INSTRUCTIONS,
+            )
 
-        # Appel a Gemini
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=[description],
-            config=config,
-        )
+            # Appel a Gemini
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[description],
+                config=config,
+            )
 
-        # Extraction du JSON de la reponse Gemini
-        # Gemini peut retourner le JSON de 2 façons differentes selon la version API
-        candidate = response.candidates[0]
+            # Extraction du JSON de la reponse Gemini
+            candidate = response.candidates[0]
+            
+            if not candidate.content or not candidate.content.parts:
+                raise ValueError("Reponse Gemini vide")
+
+            part = candidate.content.parts[0]
+
+            # Methode 1 : structured_data (objet Python direct)
+            if hasattr(part, "structured_data") and part.structured_data:
+                result = dict(part.structured_data)
+            # Methode 2 : text (string JSON a parser)
+            elif hasattr(part, "text") and part.text:
+                result = json.loads(part.text)
+            else:
+                raise ValueError("Reponse Gemini inexploitable")
         
-        if not candidate.content or not candidate.content.parts:
-            raise ValueError("Reponse Gemini vide")
-
-        part = candidate.content.parts[0]
-
-        # Methode 1 : structured_data (objet Python direct)
-        if hasattr(part, "structured_data") and part.structured_data:
-            result = dict(part.structured_data)
-        # Methode 2 : text (string JSON a parser)
-        elif hasattr(part, "text") and part.text:
-            result = json.loads(part.text)
-        else:
-            raise ValueError("Reponse Gemini inexploitable")
-        
-        # Normalisation des donnees
-        # Si provider manquant ou invalide, force aws par defaut
-        if not result.get("provider") or result.get("provider") == "null":
-            result["provider"] = "aws"
-
-        # Assure infrastructure minimale complete
-        # Un serveur necessite toujours un VPC et un security group sur AWS
-        if result.get("servers", 0) > 0 or result.get("databases", 0) > 0:
-            result["networks"] = max(result.get("networks", 0), 1)
-            result["security_groups"] = max(result.get("security_groups", 0), 1)
-        return result
-
+    except TimeoutError:
+        logger.error("Timeout lors de l'appel Gemini (30s)")
+        raise ValueError("Timeout: L'appel à l'IA a dépassé 30 secondes")
+    except json.JSONDecodeError as e:
+        logger.error(f"Erreur parsing JSON Gemini: {e}")
+        raise ValueError(f"JSON invalide retourné par Gemini: {str(e)}")
     except Exception as e:
-        # Fallback basique si Gemini echoue
-        # Retourne une config AWS minimale par defaut
-        print(f"Gemini fallback: {repr(e)}")
-        return {
-            "provider": "aws",
-            "servers": 1,
-            "databases": 0,
-            "networks": 1,
-            "load_balancers": 0,
-            "security_groups": 1,
-        }
+        logger.error(f"Erreur lors de l'appel Gemini: {repr(e)}")
+        # Fallback vers mode mock en cas d'erreur
+        logger.warning("Fallback vers mode mock")
+        result = mock_extract_infrastructure(description)
+    
+    # Validation avec Pydantic
+    try:
+        validated = InfrastructureSchema(**result)
+        result = validated.model_dump()
+    except Exception as e:
+        logger.error(f"Erreur validation JSON: {e}, données reçues: {result}")
+        raise ValueError(f"Schéma JSON invalide: {str(e)}. Champs requis: provider, servers, databases, networks, load_balancers, security_groups")
+    
+    # Normalisation des donnees
+    # Si provider manquant ou invalide, force aws par defaut
+    if not result.get("provider") or result.get("provider") == "null":
+        result["provider"] = "aws"
+
+    # Assure infrastructure minimale complete
+    # Un serveur necessite toujours un VPC et un security group sur AWS
+    if result.get("servers", 0) > 0 or result.get("databases", 0) > 0:
+        result["networks"] = max(result.get("networks", 0), 1)
+        result["security_groups"] = max(result.get("security_groups", 0), 1)
+    
+    logger.info(f"Infrastructure extraite: {result}")
+    return result
