@@ -20,18 +20,27 @@ Phrase utilisateur → Next.js → Flask → NLP → Terraform Gen → Security 
 pfe-multicloud-planner/
 ├── backend/
 │   ├── modules/
-│   │   ├── nlp.py
-│   │   ├── terraform_gen.py
-│   │   ├── security_rules.py
-│   │   └── security.py
-│   ├── app.py
-│   ├── requirements.txt
+│   │   ├── nlp.py              # Extraction NLP avec Gemini AI
+│   │   ├── terraform_gen.py    # Génération Terraform multi-cloud
+│   │   ├── security_rules.py   # Règles de sécurité par provider
+│   │   └── security.py         # Validation sécurité
+│   ├── tests/                  # Tests unitaires (pytest)
+│   │   ├── test_api.py
+│   │   ├── test_nlp.py
+│   │   ├── test_security.py
+│   │   └── test_terraform_gen.py
+│   ├── app.py                  # API Flask
+│   └── requirements.txt
 ├── frontend/
 │   ├── app/
-│   │   ├── api/generate/
-│   │   │   └── route.ts
-│   │   └── page.tsx
-│   └── package.json
+│   │   ├── api
+│   │   │   └── generate/
+│   │   │       └── route.ts    # Proxy Next.js → Flask
+│   │   ├── compone/nts/         # Composants UI
+│   │   └── page.tsx            # Page principale
+├── scripts/
+│   ├── setup.sh                # Setup automatique
+│   └── dev.sh                  # Lancement dev
 ```
 
 ---
@@ -148,12 +157,5 @@ Résultat : Génération bloquée pour raisons de sécurité + justification
 - `backend/TESTS.md` : Scénarios de test validés avec curl
 - `CONTRIBUTING.md` : Guide de contribution et développement
 - `BACKLOG.md` : Améliorations futures
-
-## Alternatives à Docker
-
-Le projet utilise des environnements virtuels Python et npm pour le développement local :
-- **Backend** : venv Python (géré automatiquement par `make`)
-- **Frontend** : npm (géré automatiquement)
-- **Scripts** : Makefile et scripts shell pour automatisation
-
-Les fichiers Docker sont disponibles dans `docker-optional/` pour ceux qui préfèrent Docker.
+- `Makefile`: Commandes Make
+- `CHANGELOG.md` : Historique des changements

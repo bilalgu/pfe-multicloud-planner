@@ -25,6 +25,11 @@ backend/
 │   ├── terraform_gen.py
 │   ├── security_rules.py
 │   └── security.py
+├── tests/
+│   ├── test_api.py
+│   ├── test_nlp.py
+│   ├── test_security.py
+│   └── test_terraform_gen.py
 ├── app.py
 └── requirements.txt
 ```
@@ -33,28 +38,26 @@ backend/
 
 ## Setup
 
-### Installation
+### Option 1 : Make (recommandé)
 
 ```bash
-cd backend/
+make setup  # Installe tout + crée .env
+make dev    # Lance backend + frontend
+```
+
+### Option 2 : Manuel
+
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### Configuration
-
-Creer `.env` :
-
-```bash
-GEMINI_API_KEY="VOTRE_CLE_ICI"
-```
-
-### Lancer Flask
-
-```bash
+cp .env.example .env
+# Éditer .env : ajouter GEMINI_API_KEY ou mettre AI_MODE=mock
 python app.py
 ```
 
-API disponible sur `http://localhost:5000`
+Voir `QUICKSTART.md` et `CONTRIBUTING.md` pour plus de détails.
 
 ---
 
@@ -185,6 +188,39 @@ curl http://localhost:5000/health
 }
 ```
 
+### GET /api/history
+
+Journal des runs
+
+```bash
+curl http://localhost:5000/api/history
+```
+
+**Response** :
+
+```json
+{
+  "runs": [
+    {
+      "timestamp": "2026-01-27T10:20:34.108474",
+      "phrase": "Je veux 3 serveurs web AWS avec un load balancer",
+      "infra": {
+        "provider": "aws",
+        "servers": 3,
+        "load_balancers": 1,
+        "databases": 0,
+        "networks": 1,
+        "security_groups": 1
+      },
+      "security_status": "OK",
+      "terraform_status": "GENERATED",
+      "security_score": 90
+    }
+  ],
+  "total": 1
+}
+```
+
 ---
 
 ## Politiques de securite
@@ -206,12 +242,4 @@ curl http://localhost:5000/health
 
 **Seuil de blocage** : Score < 70
 
----
-
-## Limitations connues
-
-1. **Load Balancer non genere** (detecte mais pas dans Terraform)
-2. **Regles verification basees mots-cles** (Azure/GCP peuvent scorer bas)
-3. **Infrastructure minimale forcee** (VPC + SG toujours generes si servers/DB)
-
-Voir `BACKLOG.md` pour details.
+Voir `BACKLOG.md` pour roadmap complète.

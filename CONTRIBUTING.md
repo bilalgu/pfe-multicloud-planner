@@ -105,6 +105,4 @@ pfe-multicloud-planner/
 │   └── app.py       # Point d'entrée
 ├── frontend/        # Next.js
 │   └── app/         # Pages et composants
-└── docs/            # Documentation
-
 ```

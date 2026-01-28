@@ -1,153 +1,171 @@
-# BACKLOG - Améliorations futures
+# BACKLOG - Multi-Cloud Planner (optimisé DÉMO)
 
-## P0 - Critique (robustesse backend actuel)
+## P0 - CRITIQUE DÉMO
 
-1. **Validation schema JSON généré**
-   - Actuellement : aucune validation du JSON Gemini
-   - Vérifier présence champs obligatoires (provider, servers, databases, etc.)
-   - Si invalide → erreur claire "Invalid JSON schema from AI"
-   - Éviter erreurs en cascade dans génération Terraform
+### Déploiement AWS réel
 
-2. **Timeouts et gestion erreurs robuste**
-   - Actuellement : pas de timeout sur appels Gemini
-   - Implémenter timeout 30s sur génération
-   - Try/catch exhaustif autour de chaque étape
-   - Messages d'erreur clairs pour l'utilisateur
+**1. Validation syntaxe Terraform générée**
 
-3. **Pipeline stable sans dépendance IA**
-   - Si Gemini fail/timeout/quota → fallback actuel basique
-   - Améliorer fallback pour gérer plus de cas
-   - Parser phrase avec règles simples (regex/NLP basique)
-   - Garantir disponibilité même si Gemini down
+- Exécuter `terraform validate` sur code généré avant déploiement
+- Détecter erreurs syntaxe/configuration
+- Retourner erreurs claires si invalide
+- Fichiers : `backend/modules/terraform_gen.py`
 
-4. **Rate limiting requêtes**
-   - Éviter requêtes infinies vers Gemini
-   - Limite simple : max 10 requêtes/minute par IP
-   - Compteur in-memory (ou Redis si production)
-   - Retourner 429 Too Many Requests si dépassé
+**2. Pipeline déploiement AWS automatique**
 
-5. **Gestion quota Gemini**
-   - Quota gratuit : vérifier limites
-   - URL monitoring : https://aistudio.google.com/app/usage
-   - Implémenter rate limiting côté backend
-   - Alertes si approche limite quota
+- Terraform apply depuis backend Flask
+- Gérer credentials AWS (IAM role ou variables environnement)
+- Endpoint POST /api/deploy pour exécuter apply
+- Logs déploiement temps réel (streaming vers frontend)
+- Retourner IPs publiques, IDs ressources AWS, endpoints créés
+- Confirmation utilisateur avant apply (bouton UI)
+- Terraform destroy automatique en cas erreur (rollback)
+- Fichiers : `backend/app.py`, `backend/modules/terraform_deploy.py` (nouveau)
 
----
+### Corrections critiques
 
-## P1 - Important (après intégration frontend)
+**3. Gestion sécurisée des secrets**
 
-6. **Retirer flask-cors si inutile**
-   - À supprimer une fois proxy Next.js validé
+- Actuellement : GEMINI_API_KEY dans `backend/.env` (local uniquement)
+- Implémenter AWS Secrets Manager pour production
+- Variables environnement sécurisées
+- Fichiers : `backend/modules/nlp.py`, configuration déploiement
 
-7. **Validation syntaxe Terraform générée**
-   - Actuellement : aucune validation syntaxique automatique
-   - À implémenter : `terraform validate` sur code généré
-   - Permettrait de détecter erreurs syntaxe avant utilisateur
+**4. Gestion quota Gemini**
 
-8. **Mode mock AI (dev sans API)**
-   - Variable d'environnement AI_MODE=mock
-   - Retourner JSON fixture au lieu d'appeler Gemini
-   - Évite consommation quota pendant dev/tests
-   - Accélère tests automatisés
+- Monitoring limites API Gemini (https://aistudio.google.com/app/usage)
+- Alertes si approche limite quota
+- Fallback automatique vers mode mock si quota dépassé
+- Rate limiting côté backend déjà implémenté
+- Fichiers : `backend/modules/nlp.py`
 
-9. **Tests unitaires automatisés**
-   - Actuellement : tests manuels avec curl
-   - Implémenter tests automatisés (pytest)
-   - Couvrir :
-     * Cas nominaux (serveur, DB, multi-cloud)
-     * Cas erreurs (phrase vide, JSON invalide)
-     * Cas blocages (DB publique, SSH ouvert)
-   - CI/CD : exécuter tests avant merge
+**5. Load Balancer AWS - générer 2+ subnets**
 
-10. **Journal minimal des runs**
-    - Sauvegarder derniers runs dans logs/history.json
-    - Format : timestamp, phrase, json, security, terraform_status
-    - Permet debugging et traçabilité
-    - Optionnel : endpoint /api/history
+- Problème actuel : ALB génère 1 seul subnet (erreur AWS minimum 2 AZ)
+- Générer au minimum 2 subnets dans 2 Availability Zones différentes
+- Fichiers : `backend/modules/terraform_gen.py`
 
-11. **Gestion sécurisée des secrets**
-    - Actuellement : GEMINI_API_KEY dans .env (local uniquement)
-    - Solutions :
-      * Secrets manager (AWS Secrets Manager, GCP Secret Manager)
-      * Vault HashiCorp
+### UI temps réel (effet WOW démo)
 
----
+**6. Affichage logs déploiement en temps réel**
 
-## P2 - Nice to have (qualité)
+- Streaming logs terraform apply vers frontend (WebSocket ou SSE)
+- Afficher progression étape par étape
+- Fichiers : `backend/app.py`, `frontend/app/page.tsx`
 
-12. **Améliorer règles de vérification security_rules.py**
-    - Règles actuelles cherchent mots-clés AWS spécifiques
-    - Azure/GCP échouent car termes différents (ex: pas "encrypted" dans Azure VM)
-    - DB seule score 40 alors que sécurisée
-    - Solutions possibles :
-      * Règles spécifiques par provider
-      * Ou vérification structurelle (pas juste mots-clés)
-    - Exemple concret : Azure VM échoue encryption_at_rest (pas de mot "encrypted")
+**7. Animation/spinner pendant déploiement**
 
-13. **Améliorer système de scoring sécurité**
-    - Problèmes actuels :
-      * Score basé sur pénalités arbitraires (CRITICAL=30, HIGH=20, MEDIUM=10)
-      * Seuil unique 70 pour tous les cas
-      * Pas de pondération par contexte (serveur seul vs infrastructure complète)
-      * Règles cherchent mots-clés (pas robuste multi-cloud)
-    - Améliorations possibles :
-      * Score pondéré par nombre de ressources
-      * Seuils adaptatifs selon provider
-      * Vérification structurelle (AST Terraform) au lieu de mots-clés
-      * Catégories de risque plus granulaires
-      * Rapport détaillé avec recommandations actionnables
-    - Objectif : score plus cohérent et informatif
+- Indicateur visuel clair pendant terraform apply
+- États : "Validating" → "Deploying" → "Success/Error"
+- Composant LoadingSpinner déjà existant à enrichir
+- Fichiers : `frontend/app/components/LoadingSpinner.tsx`
 
-14. **Tests exhaustifs supplémentaires**
-    - 10 tests validés actuellement (`backend/TESTS.md`)
-    - Tests manquants à explorer :
-      * Combinaisons complexes (serveurs + DB + LB multi-provider)
-      * Nombres extrêmes (100 serveurs, 0 de tout)
-      * Phrases ambiguës ou contradictoires
-      * Performance/charge (multiple requêtes simultanées)
-      * Gemini timeout/rate limit
-      * Validation syntaxe Terraform générée (terraform validate)
-    - Découvrir comportements inattendus avant production
+**8. Affichage ressources créées**
 
-15. **Multi-cloud testé et validé**
-    - Multi-cloud implémenté (AWS/Azure/GCP/OpenStack)
-    - Seuls AWS et GCP testés et validés
-    - Azure : syntaxe OK mais règles vérification trop strictes
-    - OpenStack : non testé
+- IPs publiques des serveurs
+- IDs ressources AWS (instance-id, vpc-id, etc.)
+- Endpoints base de données, load balancers
+- Carte visuelle des ressources déployées
+- Fichiers : `frontend/app/page.tsx`
 
-16. **Ajouter génération Load Balancer**
-    - Gemini détecte correctement load_balancers
-    - Mais terraform_gen.py ne les génère pas
-    - À implémenter : boucle génération LB AWS/Azure/GCP
+**9. État visuel clair**
 
-17. **Spécificité type de BDD**
-    - Détecter MySQL vs PostgreSQL vs MariaDB
-    - Pour l'instant : juste compteur `databases: 1`
-    - Pas bloquant pour sécurité
+- Statuts : "deploying" → "success" → "resources"
+- Code couleur (bleu en cours, vert succès, rouge erreur)
+- Timeline visuelle du déploiement
+- Fichiers : `frontend/app/page.tsx`
 
 ---
 
-## P3 - Features avancées (hors scope PoC)
+## P1 - IMPORTANT DÉMO
 
-18. **Génération Ansible**
-    - Dans PR de Mariam
-    - Hors scope P0
-    - Branche `feature/advanced-backend` à créer
+### Attendu jury
 
-19. **Déploiement sur cloud**
-    - Actuellement : local uniquement (localhost:5000)
-    - Options deployment :
-      * AWS : EC2 + RDS ou ECS/Fargate
-      * GCP : Cloud Run + Cloud SQL
-      * Azure : App Service + Azure SQL
-      * Vercel (frontend) + Railway/Render (backend)
-    - CI/CD : GitHub Actions
-    - Monitoring et logs production
+**10. Génération Ansible**
 
-20. **Features production**
-    - Terraform apply automatique depuis UI
-    - Hosting cloud (Vercel frontend + Lambda/EC2 backend)
-    - Logs structurés et centralisés (CloudWatch/Datadog)
-    - Alerting (échecs sécurité, dépassement coûts)
-    - UI avancée (dashboard métriques, visualisation architecture)
-    - Multi-utilisateurs avec authentification
+- Générer playbooks Ansible en plus de Terraform
+- Configuration post-déploiement (packages, services, configs)
+- Fichiers : `backend/modules/ansible_gen.py` (nouveau)
+
+**11. Extension pipeline multi-cloud**
+
+- Étendre déploiement automatique à Azure et GCP
+- Après validation AWS fonctionnel
+- Gérer credentials multi-cloud (Azure Service Principal, GCP Service Account)
+- Fichiers : `backend/modules/terraform_deploy.py`
+
+**12. Multi-cloud testé et validé**
+
+- AWS et GCP : déjà testés
+- Azure : corriger règles vérification trop strictes
+- OpenStack : tester et valider
+- Fichiers : `backend/modules/security_rules.py`, `backend/tests/`
+
+### Robustesse
+
+**13. Pipeline stable sans dépendance IA**
+
+- Actuellement : fallback basique si Gemini fail
+- Améliorer parser fallback avec règles regex/NLP
+- Garantir disponibilité même si Gemini down
+- Fichiers : `backend/modules/nlp.py`
+
+**14. Améliorer système scoring sécurité**
+
+- Problèmes actuels : pénalités arbitraires, seuil unique 70
+- Score pondéré par nombre ressources
+- Seuils adaptatifs selon provider
+- Catégories risque plus granulaires
+- Rapport détaillé avec recommandations actionnables
+- Fichiers : `backend/modules/security_rules.py`, `backend/modules/security.py`
+
+**15. Tests exhaustifs supplémentaires**
+
+- Tests actuels : 23 tests passent
+- Ajouter : combinaisons complexes (serveurs + DB + LB multi-provider)
+- Nombres extrêmes (100 serveurs, 0 de tout)
+- Phrases ambiguës ou contradictoires
+- Performance/charge (requêtes simultanées)
+- Gemini timeout/rate limit
+- Fichiers : `backend/tests/test_integration.py` (nouveau)
+
+### Fonctionnalités manquantes
+
+**16. Spécificité type de BDD**
+
+- Actuellement : détecte juste compteur databases: 1
+- Détecter MySQL vs PostgreSQL vs MariaDB dans phrase
+- Générer Terraform avec engine approprié
+- Fichiers : `backend/modules/nlp.py`, `backend/modules/terraform_gen.py`
+
+**17. Support plusieurs régions**
+
+- Actuellement : région hardcodée par provider
+- Détecter région dans phrase utilisateur ("us-east-1", "eu-west-1")
+- Ou permettre sélection région dans UI
+- Générer Terraform avec région appropriée
+- Fichiers : `backend/modules/nlp.py`, `backend/modules/terraform_gen.py`
+
+**18. Retirer flask-cors si inutile**
+
+- CORS activé alors que proxy Next.js utilisé
+- Supprimer dépendance une fois proxy validé
+- Fichiers : `backend/app.py`, `backend/requirements.txt`
+
+---
+
+## P2/P3/P4 - À voir une fois P0/P1 terminés
+
+Les priorités P2, P3 et P4 seront utiles uniquement si P0 et P1 sont validés.
+
+Exemples d'items P2+ :
+
+- Hébergement production (EC2, Vercel)
+- UI/UX avancée (diagrammes architecture, éditeur Monaco)
+- Documentation API (OpenAPI/Swagger)
+- Dockerisation corrigée
+- CI/CD Pipeline
+- Cache réponses (Redis)
+- Multi-utilisateurs + authentification
+- Dashboard métriques
+- Estimation coûts
