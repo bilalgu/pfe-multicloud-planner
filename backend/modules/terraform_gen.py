@@ -43,6 +43,7 @@ def generate_terraform_single_provider(provider_config: dict) -> str:
     networks = provider_config.get("networks", 1)
     security_groups = provider_config.get("security_groups", 1)
     load_balancers = provider_config.get("load_balancers", 0)
+    database_type = provider_config.get("database_type", "mysql").lower()
     
     config = PROVIDER_CONFIGS.get(provider, PROVIDER_CONFIGS["aws"])
     
@@ -506,11 +507,21 @@ resource "google_compute_global_forwarding_rule" "forwarding_rule_{i+1}" {{
         secure_settings = get_secure_settings(provider)
         
         if provider == "aws":
-            code += f"""# Base de donnees {i+1} - Politiques de securite appliquees
+            # Mapping des types de database vers engines AWS
+            db_engines = {
+                "mysql": ("mysql", "8.0"),
+                "postgresql": ("postgres", "16.1"),
+                "mariadb": ("mariadb", "10.11"),
+                "mongodb": ("docdb", "5.0")  # DocumentDB pour MongoDB
+            }
+            
+            engine, version = db_engines.get(database_type, ("mysql", "8.0"))
+            
+            code += f"""# Base de donnees {i+1} ({database_type.upper()}) - Politiques de securite appliquees
 resource "aws_db_instance" "db_{i+1}" {{
   identifier        = "db-{i+1}"
-  engine            = "mysql"
-  engine_version    = "8.0"
+  engine            = "{engine}"
+  engine_version    = "{version}"
   instance_class    = "{config["db_class"]}"
   allocated_storage = 20
   
@@ -533,12 +544,73 @@ resource "aws_db_instance" "db_{i+1}" {{
   tags = {{
     Name        = "database-{i+1}"
     Environment = "production"
+    DatabaseType = "{database_type}"
   }}
 }}
 
 """
         elif provider == "azure":
-            code += f"""# MySQL Server {i+1} - Politiques de securite appliquees
+            # Azure necessite des ressources differentes selon le type
+            if database_type == "postgresql":
+                code += f"""# PostgreSQL Server {i+1} - Politiques de securite appliquees
+resource "azurerm_postgresql_server" "db_{i+1}" {{
+  name                = "postgresql-{i+1}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  
+  administrator_login          = "psqladmin"
+  administrator_login_password = var.db_password
+  
+  sku_name   = "{config["db_sku"]}"
+  storage_mb = 20480
+  version    = "11"
+  
+  # Politiques de securite injectees automatiquement
+  public_network_access_enabled    = {str(secure_settings.get("public_network_access_enabled", False)).lower()}
+  ssl_enforcement_enabled          = {str(secure_settings.get("ssl_enforcement_enabled", True)).lower()}
+  ssl_minimal_tls_version_enforced = "{secure_settings.get("ssl_minimal_tls_version_enforced", "TLS1_2")}"
+  
+  # Sauvegardes
+  backup_retention_days = {secure_settings.get("backup_retention_days", 7)}
+  
+  tags = {{
+    Environment = "production"
+    DatabaseType = "postgresql"
+  }}
+}}
+
+"""
+            elif database_type == "mariadb":
+                code += f"""# MariaDB Server {i+1} - Politiques de securite appliquees
+resource "azurerm_mariadb_server" "db_{i+1}" {{
+  name                = "mariadb-{i+1}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  
+  administrator_login          = "mariadbadmin"
+  administrator_login_password = var.db_password
+  
+  sku_name   = "{config["db_sku"]}"
+  storage_mb = 20480
+  version    = "10.3"
+  
+  # Politiques de securite injectees automatiquement
+  public_network_access_enabled    = {str(secure_settings.get("public_network_access_enabled", False)).lower()}
+  ssl_enforcement_enabled          = {str(secure_settings.get("ssl_enforcement_enabled", True)).lower()}
+  ssl_minimal_tls_version_enforced = "{secure_settings.get("ssl_minimal_tls_version_enforced", "TLS1_2")}"
+  
+  # Sauvegardes
+  backup_retention_days = {secure_settings.get("backup_retention_days", 7)}
+  
+  tags = {{
+    Environment = "production"
+    DatabaseType = "mariadb"
+  }}
+}}
+
+"""
+            else:  # mysql ou mongodb (Azure n'a pas MongoDB natif)
+                code += f"""# MySQL Server {i+1} - Politiques de securite appliquees
 resource "azurerm_mysql_server" "db_{i+1}" {{
   name                = "mysql-{i+1}"
   location            = azurerm_resource_group.main.location
@@ -561,15 +633,26 @@ resource "azurerm_mysql_server" "db_{i+1}" {{
   
   tags = {{
     Environment = "production"
+    DatabaseType = "{database_type}"
   }}
 }}
 
 """
         elif provider == "gcp":
-            code += f"""# Cloud SQL {i+1} - Politiques de securite appliquees
+            # Mapping des types de database vers versions GCP
+            gcp_db_versions = {
+                "mysql": "MYSQL_8_0",
+                "postgresql": "POSTGRES_16",
+                "mariadb": "MYSQL_8_0",  # GCP n'a pas MariaDB natif, fallback MySQL
+                "mongodb": "MYSQL_8_0"   # GCP n'a pas MongoDB natif, fallback MySQL
+            }
+            
+            db_version = gcp_db_versions.get(database_type, "MYSQL_8_0")
+            
+            code += f"""# Cloud SQL {i+1} ({database_type.upper()}) - Politiques de securite appliquees
 resource "google_sql_database_instance" "db_{i+1}" {{
   name             = "db-{i+1}"
-  database_version = "MYSQL_8_0"
+  database_version = "{db_version}"
   region           = "{config["region"]}"
   
   settings {{
@@ -590,18 +673,23 @@ resource "google_sql_database_instance" "db_{i+1}" {{
       start_time = "{secure_settings.get("backup_start_time", "03:00")}"
     }}
   }}
+  
+  labels = {{
+    environment = "production"
+    database_type = "{database_type}"
+  }}
 }}
 
 """
         elif provider == "openstack":
-            code += f"""# Base de donnees {i+1} - Politiques de securite appliquees
+            code += f"""# Base de donnees {i+1} ({database_type.upper()}) - Politiques de securite appliquees
 resource "openstack_db_instance_v1" "db_{i+1}" {{
   name      = "db-{i+1}"
   flavor_id = "{config["db_flavor"]}"
   size      = 20
   
   datastore {{
-    type    = "mysql"
+    type    = "{database_type}"
     version = "8.0"
   }}
 }}

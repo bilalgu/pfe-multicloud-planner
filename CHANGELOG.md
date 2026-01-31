@@ -2,6 +2,29 @@
 
 Historique des changements du projet.
 
+## [0.4.1] - 2026-01-31 (Bilal)
+
+### Ajouté
+- **Support database_type** : Spécification du type de base de données (mysql, postgresql, mongodb, mariadb)
+- Validation Pydantic pour database_type avec fallback MySQL
+- Génération Terraform adaptée selon le type de database
+- Mapping intelligent des engines par provider :
+  - AWS : mysql, postgres, mariadb, docdb (MongoDB)
+  - GCP : MYSQL_8_0, POSTGRES_16
+  - Azure : azurerm_mysql_server, azurerm_postgresql_server, azurerm_mariadb_server
+
+### Modifié
+- `backend/modules/nlp.py` : Nouveau champ `database_type` dans ProviderConfig
+- `backend/modules/terraform_gen.py` : Génération databases avec type dynamique
+- Prompt Gemini AI : Instructions pour détecter MongoDB, PostgreSQL, MariaDB
+
+### Testé
+- "3 serveurs avec MongoDB" → AWS DocumentDB
+- "5 serveurs avec PostgreSQL" → AWS RDS PostgreSQL
+- "3 serveurs GCP avec MongoDB + 2 serveurs AWS avec PostgreSQL" → Multi-cloud + multi-database
+
+---
+
 ## [0.4.0] - 2026-01-31 (Bilal)
 
 ### Ajouté

@@ -49,6 +49,10 @@ json_schema = types.Schema(
                         type=types.Type.INTEGER,
                         description="Nombre de bases de donnees (0 si non mentionne)"
                     ),
+                    "database_type": types.Schema(
+                        type=types.Type.STRING,
+                        description="Type de base de donnees : mysql, postgresql, mongodb, mariadb"
+                    ),
                     "networks": types.Schema(
                         type=types.Type.INTEGER,
                         description="Nombre de reseaux"
@@ -62,7 +66,7 @@ json_schema = types.Schema(
                         description="Nombre de groupes de securite"
                     ),
                 },
-                required=["provider", "servers", "databases", "networks", "load_balancers", "security_groups"],
+                required=["provider", "servers", "databases", "database_type", "networks", "load_balancers", "security_groups"],
             )
         )
     },
@@ -84,10 +88,17 @@ SYSTEM_INSTRUCTIONS = (
     "- Si l'utilisateur ne mentionne PAS de load balancer -> load_balancers: 0\n"
     "- Ne JAMAIS rajouter de composants non demandes\n"
     "\n"
+    "TYPE DE BASE DE DONNEES:\n"
+    "- Si MongoDB mentionne -> database_type: 'mongodb'\n"
+    "- Si PostgreSQL mentionne -> database_type: 'postgresql'\n"
+    "- Si MariaDB mentionne -> database_type: 'mariadb'\n"
+    "- Si MySQL ou aucun type specifie -> database_type: 'mysql'\n"
+    "\n"
     "EXEMPLES:\n"
-    "Demande: 'Je veux un serveur AWS' -> {providers: [{provider: 'aws', servers: 1, databases: 0, networks: 1, load_balancers: 0, security_groups: 1}]}\n"
-    "Demande: '3 serveurs sur GCP + 2 serveurs sur AWS' -> {providers: [{provider: 'gcp', servers: 3, databases: 0, networks: 1, load_balancers: 0, security_groups: 1}, {provider: 'aws', servers: 2, databases: 0, networks: 1, load_balancers: 0, security_groups: 1}]}\n"
-    "Demande: '3 serveurs avec MySQL' -> {providers: [{servers: 3, databases: 1, load_balancers: 0}]}\n"
+    "Demande: 'Je veux un serveur AWS' -> {providers: [{provider: 'aws', servers: 1, databases: 0, database_type: 'mysql', networks: 1, load_balancers: 0, security_groups: 1}]}\n"
+    "Demande: '3 serveurs sur GCP + 2 serveurs sur AWS' -> {providers: [{provider: 'gcp', servers: 3, databases: 0, database_type: 'mysql', networks: 1, load_balancers: 0, security_groups: 1}, {provider: 'aws', servers: 2, databases: 0, database_type: 'mysql', networks: 1, load_balancers: 0, security_groups: 1}]}\n"
+    "Demande: '3 serveurs avec MongoDB' -> {providers: [{provider: 'aws', servers: 3, databases: 1, database_type: 'mongodb', load_balancers: 0}]}\n"
+    "Demande: '5 serveurs avec PostgreSQL' -> {providers: [{provider: 'aws', servers: 5, databases: 1, database_type: 'postgresql', load_balancers: 0}]}\n"
 )
 
 # Modèle Pydantic pour validation - configuration par provider
@@ -96,6 +107,7 @@ class ProviderConfig(BaseModel):
     provider: str = Field(..., description="Provider cloud")
     servers: int = Field(ge=0, default=0, description="Nombre de serveurs")
     databases: int = Field(ge=0, default=0, description="Nombre de bases de données")
+    database_type: str = Field(default="mysql", description="Type de base de données (mysql, postgresql, mongodb, mariadb)")
     networks: int = Field(ge=0, default=0, description="Nombre de réseaux")
     load_balancers: int = Field(ge=0, default=0, description="Nombre de load balancers")
     security_groups: int = Field(ge=0, default=0, description="Nombre de security groups")
@@ -108,6 +120,16 @@ class ProviderConfig(BaseModel):
         if v_lower not in valid_providers:
             logger.warning(f"Provider invalide '{v}', utilisation de 'aws' par défaut")
             return 'aws'
+        return v_lower
+    
+    @field_validator('database_type')
+    @classmethod
+    def validate_database_type(cls, v: str) -> str:
+        valid_types = ['mysql', 'postgresql', 'mongodb', 'mariadb']
+        v_lower = v.lower()
+        if v_lower not in valid_types:
+            logger.warning(f"Type de database invalide '{v}', utilisation de 'mysql' par défaut")
+            return 'mysql'
         return v_lower
 
 
@@ -123,6 +145,7 @@ class InfrastructureSchema(BaseModel):
                         "provider": "gcp",
                         "servers": 3,
                         "databases": 0,
+                        "database_type": "mysql",
                         "networks": 1,
                         "load_balancers": 0,
                         "security_groups": 1
@@ -131,6 +154,7 @@ class InfrastructureSchema(BaseModel):
                         "provider": "aws",
                         "servers": 2,
                         "databases": 1,
+                        "database_type": "postgresql",
                         "networks": 1,
                         "load_balancers": 0,
                         "security_groups": 1
@@ -198,8 +222,17 @@ def mock_extract_infrastructure(description: str) -> dict:
     
     # Détection databases
     databases = 0
-    if any(word in desc_lower for word in ["database", "db", "base", "mysql", "postgresql"]):
+    if any(word in desc_lower for word in ["database", "db", "base", "mysql", "postgresql", "mongodb", "mariadb"]):
         databases = 1
+    
+    # Détection type de database
+    database_type = "mysql"
+    if "mongodb" in desc_lower:
+        database_type = "mongodb"
+    elif "postgresql" in desc_lower or "postgres" in desc_lower:
+        database_type = "postgresql"
+    elif "mariadb" in desc_lower:
+        database_type = "mariadb"
     
     # Détection load balancers
     load_balancers = 0
@@ -217,6 +250,7 @@ def mock_extract_infrastructure(description: str) -> dict:
                 "provider": provider,
                 "servers": servers,
                 "databases": databases,
+                "database_type": database_type,
                 "networks": networks,
                 "load_balancers": load_balancers,
                 "security_groups": security_groups
