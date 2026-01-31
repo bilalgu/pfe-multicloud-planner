@@ -2,7 +2,30 @@
 
 Historique des changements du projet.
 
+## [0.4.0] - 2026-01-31 (Bilal)
+
+### Ajouté
+- **Support multi-provider dans une même requête** : Possibilité de combiner plusieurs providers (ex: "3 serveurs GCP + 2 serveurs AWS")
+- Nouveau schéma Pydantic `ProviderConfig` pour validation par provider
+- Agrégation automatique des statistiques multi-provider dans le frontend
+- Génération Terraform multi-cloud avec sections séparées par provider
+- Tests unitaires adaptés au format multi-provider (23 tests passent)
+
+### Modifié
+- `backend/modules/nlp.py` : Schéma `InfrastructureSchema` avec liste de `providers`
+- `backend/modules/terraform_gen.py` : Fonction `generate_terraform()` boucle sur providers
+- `frontend/app/page.tsx` : Affichage agrégé des ressources multi-cloud
+- Prompt Gemini AI : Instructions pour extraire plusieurs providers
+- Format API : `{"providers": [{"provider": "aws", ...}]}` au lieu de `{"provider": "aws", ...}`
+
+### Rétro-compatible
+- Mono-provider continue de fonctionner (liste avec 1 élément)
+- Tous les tests existants adaptés sans régression
+
+---
+
 ## [0.3.0] - 2026-01-27 (Sira)
+
 ### Ajouté
 - Validation schéma JSON avec Pydantic
 - Timeout 30s sur appels Gemini
@@ -31,6 +54,7 @@ Historique des changements du projet.
 - CI/CD GitHub Actions
 
 ## [0.2.0] - 2026-01-21 (Mariam)
+
 ### Ajouté
 - Architecture Flask modulaire (modules/nlp.py, terraform_gen.py, security.py)
 - Support multi-cloud complet (AWS/Azure/GCP/OpenStack)
@@ -51,6 +75,7 @@ Historique des changements du projet.
 - README racine mis à jour (quickstart)
 
 ## [0.1.0] - 2026-01-10 (Toute l'équipe)
+
 ### Ajouté
 - Génération Terraform multi-cloud (AWS/Azure/GCP/OpenStack)
 - Validation sécurité avec 6 règles

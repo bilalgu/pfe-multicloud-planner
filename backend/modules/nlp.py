@@ -27,63 +27,78 @@ if AI_MODE == "real":
 elif AI_MODE == "mock":
     logger.info("Mode MOCK activé - utilisation de données fictives")
 
-# Schema JSON structure - definit le format attendu
+# Schema JSON structure - definit le format attendu par Gemini
+# Format liste pour supporter mono et multi-cloud
 json_schema = types.Schema(
     type=types.Type.OBJECT,
     properties={
-        "provider": types.Schema(
-            type=types.Type.STRING,
-            description="Provider cloud : aws, azure, gcp, openstack"
-        ),
-        "servers": types.Schema(
-            type=types.Type.INTEGER,
-            description="Nombre de serveurs/VMs"
-        ),
-        "databases": types.Schema(
-            type=types.Type.INTEGER,
-            description="Nombre de bases de donnees (0 si non mentionne)"
-        ),
-        "networks": types.Schema(
-            type=types.Type.INTEGER,
-            description="Nombre de reseaux"
-        ),
-        "load_balancers": types.Schema(
-            type=types.Type.INTEGER,
-            description="Nombre de load balancers (0 si non mentionne)"
-        ),
-        "security_groups": types.Schema(
-            type=types.Type.INTEGER,
-            description="Nombre de groupes de securite"
-        ),
+        "providers": types.Schema(
+            type=types.Type.ARRAY,
+            items=types.Schema(
+                type=types.Type.OBJECT,
+                properties={
+                    "provider": types.Schema(
+                        type=types.Type.STRING,
+                        description="Provider cloud : aws, azure, gcp, openstack"
+                    ),
+                    "servers": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Nombre de serveurs/VMs"
+                    ),
+                    "databases": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Nombre de bases de donnees (0 si non mentionne)"
+                    ),
+                    "networks": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Nombre de reseaux"
+                    ),
+                    "load_balancers": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Nombre de load balancers (0 si non mentionne)"
+                    ),
+                    "security_groups": types.Schema(
+                        type=types.Type.INTEGER,
+                        description="Nombre de groupes de securite"
+                    ),
+                },
+                required=["provider", "servers", "databases", "networks", "load_balancers", "security_groups"],
+            )
+        )
     },
-    required=["provider", "servers", "databases", "networks", "load_balancers", "security_groups"],
+    required=["providers"],
 )
 
 # Instructions pour Gemini - prompt system
 SYSTEM_INSTRUCTIONS = (
     "Tu es un architecte cloud expert. "
-    "Analyse EXACTEMENT la demande utilisateur et genere UNIQUEMENT les composants explicitement demandes. "
+    "Analyse EXACTEMENT la demande utilisateur et genere les composants demandes. "
     "\n\n"
+    "MULTI-CLOUD:\n"
+    "- Si plusieurs providers mentionnes -> retourne une liste avec chaque provider\n"
+    "- Si un seul provider -> retourne une liste avec 1 element\n"
+    "- Repartis les ressources selon la demande utilisateur\n"
+    "\n"
     "REGLES STRICTES:\n"
     "- Si l'utilisateur ne mentionne PAS de base de donnees -> databases: 0\n"
     "- Si l'utilisateur ne mentionne PAS de load balancer -> load_balancers: 0\n"
     "- Ne JAMAIS rajouter de composants non demandes\n"
     "\n"
     "EXEMPLES:\n"
-    "Demande: 'Je veux un serveur AWS' -> {servers: 1, databases: 0, load_balancers: 0}\n"
-    "Demande: 'Je veux 3 serveurs avec MySQL' -> {servers: 3, databases: 1, load_balancers: 0}\n"
-    "Demande: 'Une base de donnees' -> {servers: 0, databases: 1, load_balancers: 0}\n"
+    "Demande: 'Je veux un serveur AWS' -> {providers: [{provider: 'aws', servers: 1, databases: 0, networks: 1, load_balancers: 0, security_groups: 1}]}\n"
+    "Demande: '3 serveurs sur GCP + 2 serveurs sur AWS' -> {providers: [{provider: 'gcp', servers: 3, databases: 0, networks: 1, load_balancers: 0, security_groups: 1}, {provider: 'aws', servers: 2, databases: 0, networks: 1, load_balancers: 0, security_groups: 1}]}\n"
+    "Demande: '3 serveurs avec MySQL' -> {providers: [{servers: 3, databases: 1, load_balancers: 0}]}\n"
 )
 
-# Modèle Pydantic pour validation
-class InfrastructureSchema(BaseModel):
-    """Schéma de validation pour la structure d'infrastructure"""
+# Modèle Pydantic pour validation - configuration par provider
+class ProviderConfig(BaseModel):
+    """Configuration pour un provider unique"""
     provider: str = Field(..., description="Provider cloud")
-    servers: int = Field(..., ge=0, description="Nombre de serveurs")
-    databases: int = Field(..., ge=0, description="Nombre de bases de données")
-    networks: int = Field(..., ge=0, description="Nombre de réseaux")
-    load_balancers: int = Field(..., ge=0, description="Nombre de load balancers")
-    security_groups: int = Field(..., ge=0, description="Nombre de security groups")
+    servers: int = Field(ge=0, default=0, description="Nombre de serveurs")
+    databases: int = Field(ge=0, default=0, description="Nombre de bases de données")
+    networks: int = Field(ge=0, default=0, description="Nombre de réseaux")
+    load_balancers: int = Field(ge=0, default=0, description="Nombre de load balancers")
+    security_groups: int = Field(ge=0, default=0, description="Nombre de security groups")
     
     @field_validator('provider')
     @classmethod
@@ -94,16 +109,33 @@ class InfrastructureSchema(BaseModel):
             logger.warning(f"Provider invalide '{v}', utilisation de 'aws' par défaut")
             return 'aws'
         return v_lower
+
+
+class InfrastructureSchema(BaseModel):
+    """Schéma de validation pour infrastructure mono ou multi-cloud"""
+    providers: list[ProviderConfig] = Field(..., min_length=1, description="Liste des configurations par provider")
     
     class Config:
         json_schema_extra = {
             "example": {
-                "provider": "aws",
-                "servers": 1,
-                "databases": 0,
-                "networks": 1,
-                "load_balancers": 0,
-                "security_groups": 1
+                "providers": [
+                    {
+                        "provider": "gcp",
+                        "servers": 3,
+                        "databases": 0,
+                        "networks": 1,
+                        "load_balancers": 0,
+                        "security_groups": 1
+                    },
+                    {
+                        "provider": "aws",
+                        "servers": 2,
+                        "databases": 1,
+                        "networks": 1,
+                        "load_balancers": 0,
+                        "security_groups": 1
+                    }
+                ]
             }
         }
 
@@ -178,26 +210,31 @@ def mock_extract_infrastructure(description: str) -> dict:
     networks = 1 if servers > 0 or databases > 0 else 0
     security_groups = 1 if servers > 0 or databases > 0 else 0
     
+    # Format liste pour compatibilité avec nouveau schéma
     return {
-        "provider": provider,
-        "servers": servers,
-        "databases": databases,
-        "networks": networks,
-        "load_balancers": load_balancers,
-        "security_groups": security_groups
+        "providers": [
+            {
+                "provider": provider,
+                "servers": servers,
+                "databases": databases,
+                "networks": networks,
+                "load_balancers": load_balancers,
+                "security_groups": security_groups
+            }
+        ]
     }
 
 
 def extract_infrastructure(description: str) -> dict:
     """
     Phrase utilisateur -> JSON structure via Gemini (ou mock)
-    Retourne un dictionnaire validé avec provider, servers, databases, etc.
+    Retourne un dictionnaire validé avec liste de providers
     
     Args:
         description: Description de l'infrastructure en langage naturel
         
     Returns:
-        dict: Structure d'infrastructure validée
+        dict: Structure d'infrastructure validée avec clé 'providers' (liste)
         
     Raises:
         ValueError: Si le JSON généré est invalide
@@ -270,18 +307,19 @@ def extract_infrastructure(description: str) -> dict:
         result = validated.model_dump()
     except Exception as e:
         logger.error(f"Erreur validation JSON: {e}, données reçues: {result}")
-        raise ValueError(f"Schéma JSON invalide: {str(e)}. Champs requis: provider, servers, databases, networks, load_balancers, security_groups")
+        raise ValueError(f"Schéma JSON invalide: {str(e)}. Format attendu: {{'providers': [{{...}}]}}")
     
-    # Normalisation des donnees
-    # Si provider manquant ou invalide, force aws par defaut
-    if not result.get("provider") or result.get("provider") == "null":
-        result["provider"] = "aws"
+    # Normalisation des données pour chaque provider
+    for provider_config in result["providers"]:
+        # Si provider manquant ou invalide, force aws par defaut
+        if not provider_config.get("provider") or provider_config.get("provider") == "null":
+            provider_config["provider"] = "aws"
 
-    # Assure infrastructure minimale complete
-    # Un serveur necessite toujours un VPC et un security group sur AWS
-    if result.get("servers", 0) > 0 or result.get("databases", 0) > 0:
-        result["networks"] = max(result.get("networks", 0), 1)
-        result["security_groups"] = max(result.get("security_groups", 0), 1)
+        # Assure infrastructure minimale complete
+        # Un serveur necessite toujours un VPC et un security group
+        if provider_config.get("servers", 0) > 0 or provider_config.get("databases", 0) > 0:
+            provider_config["networks"] = max(provider_config.get("networks", 0), 1)
+            provider_config["security_groups"] = max(provider_config.get("security_groups", 0), 1)
     
     logger.info(f"Infrastructure extraite: {result}")
     return result

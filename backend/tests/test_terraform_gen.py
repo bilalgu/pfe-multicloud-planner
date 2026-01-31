@@ -4,19 +4,23 @@ Tests unitaires pour le module Terraform Generation
 import pytest
 from modules.terraform_gen import generate_terraform
 
-
 class TestTerraformGen:
     """Tests pour la génération Terraform"""
     
     def test_generate_aws_simple(self):
         """Test génération AWS simple"""
+        # Nouveau format avec liste de providers
         infra = {
-            "provider": "aws",
-            "servers": 1,
-            "databases": 0,
-            "networks": 1,
-            "load_balancers": 0,
-            "security_groups": 1
+            "providers": [
+                {
+                    "provider": "aws",
+                    "servers": 1,
+                    "databases": 0,
+                    "networks": 1,
+                    "load_balancers": 0,
+                    "security_groups": 1
+                }
+            ]
         }
         code = generate_terraform(infra)
         assert "provider \"aws\"" in code
@@ -25,13 +29,18 @@ class TestTerraformGen:
     
     def test_generate_aws_with_db(self):
         """Test génération AWS avec base de données"""
+        # Nouveau format avec liste de providers
         infra = {
-            "provider": "aws",
-            "servers": 2,
-            "databases": 1,
-            "networks": 1,
-            "load_balancers": 0,
-            "security_groups": 1
+            "providers": [
+                {
+                    "provider": "aws",
+                    "servers": 2,
+                    "databases": 1,
+                    "networks": 1,
+                    "load_balancers": 0,
+                    "security_groups": 1
+                }
+            ]
         }
         code = generate_terraform(infra)
         assert "aws_db_instance" in code
@@ -39,13 +48,18 @@ class TestTerraformGen:
     
     def test_generate_aws_with_lb(self):
         """Test génération AWS avec load balancer"""
+        # Nouveau format avec liste de providers
         infra = {
-            "provider": "aws",
-            "servers": 2,
-            "databases": 0,
-            "networks": 1,
-            "load_balancers": 1,
-            "security_groups": 1
+            "providers": [
+                {
+                    "provider": "aws",
+                    "servers": 2,
+                    "databases": 0,
+                    "networks": 1,
+                    "load_balancers": 1,
+                    "security_groups": 1
+                }
+            ]
         }
         code = generate_terraform(infra)
         assert "aws_lb" in code
@@ -53,13 +67,18 @@ class TestTerraformGen:
     
     def test_generate_gcp(self):
         """Test génération GCP"""
+        # Nouveau format avec liste de providers
         infra = {
-            "provider": "gcp",
-            "servers": 1,
-            "databases": 0,
-            "networks": 1,
-            "load_balancers": 0,
-            "security_groups": 1
+            "providers": [
+                {
+                    "provider": "gcp",
+                    "servers": 1,
+                    "databases": 0,
+                    "networks": 1,
+                    "load_balancers": 0,
+                    "security_groups": 1
+                }
+            ]
         }
         code = generate_terraform(infra)
         assert "provider \"google\"" in code
@@ -67,13 +86,18 @@ class TestTerraformGen:
     
     def test_generate_azure(self):
         """Test génération Azure"""
+        # Nouveau format avec liste de providers
         infra = {
-            "provider": "azure",
-            "servers": 1,
-            "databases": 0,
-            "networks": 1,
-            "load_balancers": 0,
-            "security_groups": 1
+            "providers": [
+                {
+                    "provider": "azure",
+                    "servers": 1,
+                    "databases": 0,
+                    "networks": 1,
+                    "load_balancers": 0,
+                    "security_groups": 1
+                }
+            ]
         }
         code = generate_terraform(infra)
         assert "provider \"azurerm\"" in code

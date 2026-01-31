@@ -36,7 +36,7 @@ pfe-multicloud-planner/
 │   │   ├── api
 │   │   │   └── generate/
 │   │   │       └── route.ts    # Proxy Next.js → Flask
-│   │   ├── compone/nts/         # Composants UI
+│   │   ├── components/         # Composants UI
 │   │   └── page.tsx            # Page principale
 ├── scripts/
 │   ├── setup.sh                # Setup automatique
@@ -124,13 +124,21 @@ make clean          # Nettoyer fichiers générés
 
 ### Exemples
 
-**Cas OK** :
+**Cas mono-provider** :
 
 ```
 Je veux 2 serveurs web sur AWS
 ```
 
-Résultat : Infrastructure générée avec succès + code Terraform
+Résultat : Infrastructure AWS générée avec succès + code Terraform
+
+**Cas multi-provider** :
+
+```
+3 serveurs sur GCP + 2 serveurs sur AWS avec une base de données
+```
+
+Résultat : Infrastructure multi-cloud générée (GCP: 3 serveurs, AWS: 2 serveurs + 1 DB)
 
 **Cas bloqué** :
 
@@ -148,6 +156,8 @@ Résultat : Génération bloquée pour raisons de sécurité + justification
 - GCP (testé)
 - Azure (règles limitées)
 - OpenStack (non testé)
+
+**Support multi-provider** : Possibilité de combiner plusieurs providers dans une même requête (ex: AWS + GCP)
 
 ---
 
