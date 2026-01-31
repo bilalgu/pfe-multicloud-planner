@@ -6,7 +6,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ValidationError
 from contextlib import contextmanager
 
 load_dotenv()
@@ -87,6 +87,7 @@ SYSTEM_INSTRUCTIONS = (
     "- Si l'utilisateur ne mentionne PAS de base de donnees -> databases: 0\n"
     "- Si l'utilisateur ne mentionne PAS de load balancer -> load_balancers: 0\n"
     "- Ne JAMAIS rajouter de composants non demandes\n"
+    "- Si la demande est vague ou incomplete (ex: 'je veux une infra') -> genere au minimum 1 serveur AWS\n"  # ← AJOUTE CETTE LIGNE
     "\n"
     "TYPE DE BASE DE DONNEES:\n"
     "- Si MongoDB mentionne -> database_type: 'mongodb'\n"
@@ -99,17 +100,18 @@ SYSTEM_INSTRUCTIONS = (
     "Demande: '3 serveurs sur GCP + 2 serveurs sur AWS' -> {providers: [{provider: 'gcp', servers: 3, databases: 0, database_type: 'mysql', networks: 1, load_balancers: 0, security_groups: 1}, {provider: 'aws', servers: 2, databases: 0, database_type: 'mysql', networks: 1, load_balancers: 0, security_groups: 1}]}\n"
     "Demande: '3 serveurs avec MongoDB' -> {providers: [{provider: 'aws', servers: 3, databases: 1, database_type: 'mongodb', load_balancers: 0}]}\n"
     "Demande: '5 serveurs avec PostgreSQL' -> {providers: [{provider: 'aws', servers: 5, databases: 1, database_type: 'postgresql', load_balancers: 0}]}\n"
+    "Demande: 'Je veux une infra' -> {providers: [{provider: 'aws', servers: 1, databases: 0, database_type: 'mysql', networks: 1, load_balancers: 0, security_groups: 1}]}\n"  # ← AJOUTE CET EXEMPLE
 )
 
 # Modèle Pydantic pour validation - configuration par provider
 class ProviderConfig(BaseModel):
     """Configuration pour un provider unique"""
     provider: str = Field(..., description="Provider cloud")
-    servers: int = Field(ge=0, default=0, description="Nombre de serveurs")
-    databases: int = Field(ge=0, default=0, description="Nombre de bases de données")
+    servers: int = Field(ge=0, le=50, default=0, description="Nombre de serveurs (max 50)")
+    databases: int = Field(ge=0, le=10, default=0, description="Nombre de bases de données (max 10)")
     database_type: str = Field(default="mysql", description="Type de base de données (mysql, postgresql, mongodb, mariadb)")
     networks: int = Field(ge=0, default=0, description="Nombre de réseaux")
-    load_balancers: int = Field(ge=0, default=0, description="Nombre de load balancers")
+    load_balancers: int = Field(ge=0, le=5, default=0, description="Nombre de load balancers (max 5)")
     security_groups: int = Field(ge=0, default=0, description="Nombre de security groups")
     
     @field_validator('provider')
@@ -339,6 +341,31 @@ def extract_infrastructure(description: str) -> dict:
     try:
         validated = InfrastructureSchema(**result)
         result = validated.model_dump()
+    except ValidationError as e:
+        # Detection des limites depassees
+        error_str = str(e)
+        
+        if "servers" in error_str and "less_than_equal" in error_str:
+            raise ValueError(
+                "Limite pédagogique dépassée : maximum 50 serveurs par provider. "
+                "Pour des infrastructures plus grandes, utilisez des boucles Terraform "
+                "(count ou for_each). Exemple: resource \"aws_instance\" \"servers\" { count = var.server_count }"
+            )
+        elif "databases" in error_str and "less_than_equal" in error_str:
+            raise ValueError(
+                "Limite pédagogique dépassée : maximum 10 databases par provider. "
+                "Pour des infrastructures plus grandes, utilisez des boucles Terraform. "
+                "Exemple: resource \"aws_db_instance\" \"dbs\" { count = var.db_count }"
+            )
+        elif "load_balancers" in error_str and "less_than_equal" in error_str:
+            raise ValueError(
+                "Limite pédagogique dépassée : maximum 5 load balancers par provider. "
+                "Pour des infrastructures plus grandes, utilisez des boucles Terraform. "
+                "Exemple: resource \"aws_lb\" \"lbs\" { count = var.lb_count }"
+            )
+        else:
+            logger.error(f"Erreur validation JSON: {e}, données reçues: {result}")
+            raise ValueError(f"Schéma JSON invalide: {str(e)}. Format attendu: {{'providers': [{{...}}]}}")
     except Exception as e:
         logger.error(f"Erreur validation JSON: {e}, données reçues: {result}")
         raise ValueError(f"Schéma JSON invalide: {str(e)}. Format attendu: {{'providers': [{{...}}]}}")

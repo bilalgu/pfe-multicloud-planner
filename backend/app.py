@@ -9,6 +9,7 @@ from flask_limiter.util import get_remote_address
 from modules.nlp import extract_infrastructure
 from modules.terraform_gen import generate_terraform
 from modules.security import validate_infrastructure
+from pydantic import ValidationError
 
 # Configuration logging
 logging.basicConfig(
@@ -18,6 +19,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+app.config['JSON_AS_ASCII'] = False  # Force UTF-8 pour les accents
 CORS(app)
 
 # Rate limiting: 10 requêtes par minute par IP
@@ -99,6 +101,32 @@ def generate():
         # Extraction via Gemini (ou mock)
         try:
             infra = extract_infrastructure(phrase)
+        except ValidationError as e:
+            # Message pédagogique pour limites dépassées
+            error_msg = str(e)
+            if "le=50" in error_msg or "servers" in error_msg.lower():
+                return jsonify({
+                    "error": "Limite dépassée",
+                    "message": "Limite pédagogique : maximum 50 serveurs par provider. Pour des infrastructures plus grandes, utilisez des boucles Terraform (count ou for_each) au lieu de répéter N blocs.",
+                    "recommendation": "Exemple Terraform: resource \"aws_instance\" \"servers\" { count = var.server_count }"
+                }), 422
+            elif "le=10" in error_msg or "databases" in error_msg.lower():
+                return jsonify({
+                    "error": "Limite dépassée",
+                    "message": "Limite pédagogique : maximum 10 databases par provider. Pour des infrastructures plus grandes, utilisez des boucles Terraform.",
+                    "recommendation": "Exemple Terraform: resource \"aws_db_instance\" \"dbs\" { count = var.db_count }"
+                }), 422
+            elif "le=5" in error_msg or "load_balancers" in error_msg.lower():
+                return jsonify({
+                    "error": "Limite dépassée",
+                    "message": "Limite pédagogique : maximum 5 load balancers par provider. Pour des infrastructures plus grandes, utilisez des boucles Terraform.",
+                    "recommendation": "Exemple Terraform: resource \"aws_lb\" \"lbs\" { count = var.lb_count }"
+                }), 422
+            else:
+                return jsonify({
+                    "error": "Validation error",
+                    "message": str(e)
+                }), 422
         except ValueError as e:
             logger.error(f"Erreur extraction infrastructure: {e}")
             return jsonify({
