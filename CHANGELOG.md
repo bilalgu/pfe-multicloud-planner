@@ -2,6 +2,28 @@
 
 Historique des changements du projet.
 
+## [0.4.2] - 2026-01-31 (Bilal)
+
+### Ajouté
+- **Limites pédagogiques sur ressources** : Maximum 50 serveurs, 10 databases, 5 load balancers par provider
+- Messages d'erreur pédagogiques avec recommandations Terraform (count/for_each)
+- Gestion intelligente des requêtes vagues : génère 1 serveur AWS minimum
+- Validation Pydantic avec limites (`le=50`, `le=10`, `le=5`)
+
+### Modifié
+- `backend/modules/nlp.py` : Limites ajoutées dans ProviderConfig + gestion ValidationError
+- `backend/app.py` : Encodage UTF-8 pour accents français (`JSON_AS_ASCII = False`)
+- Prompt Gemini : Règle pour requêtes vagues
+
+### Testé
+- "1000 serveurs AWS" → Message pédagogique avec recommandation count
+- "50 serveurs AWS" → Génération OK (limite exacte)
+- "-5 serveurs AWS" → Gemini corrige automatiquement → 5 serveurs
+- "5 serveurs DigitalOcean" → Fallback AWS
+- "Je veux une infra" → Génère 1 serveur AWS minimum
+
+---
+
 ## [0.4.1] - 2026-01-31 (Bilal)
 
 ### Ajouté
