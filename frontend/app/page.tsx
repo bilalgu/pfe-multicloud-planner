@@ -5,15 +5,19 @@ import ErrorToast from './components/ErrorToast';
 import SuccessToast from './components/SuccessToast';
 import LoadingSpinner from './components/LoadingSpinner';
 
+interface ProviderConfig {
+  provider: string;
+  servers: number;
+  databases: number;
+  networks: number;
+  load_balancers: number;
+  security_groups: number;
+}
+
 interface InfrastructureResult {
   success: boolean;
   infrastructure: {
-    provider: string;
-    servers: number;
-    databases: number;
-    networks: number;
-    load_balancers: number;
-    security_groups: number;
+    providers: ProviderConfig[];
   };
   terraform_code: string;
   message: string;
@@ -123,6 +127,34 @@ export default function Home() {
     }
   };
 
+  // Aggrege les stats pour l'affichage (somme de tous les providers)
+  const getAggregatedStats = () => {
+    if (!result?.infrastructure?.providers) return null;
+    
+    const providers = result.infrastructure.providers;
+    
+    // Liste des providers detectes
+    const providerNames = providers.map(p => p.provider.toUpperCase()).join(' + ');
+    
+    // Somme de toutes les ressources
+    const totalServers = providers.reduce((sum, p) => sum + p.servers, 0);
+    const totalDatabases = providers.reduce((sum, p) => sum + p.databases, 0);
+    const totalNetworks = providers.reduce((sum, p) => sum + p.networks, 0);
+    const totalLBs = providers.reduce((sum, p) => sum + p.load_balancers, 0);
+    const totalSGs = providers.reduce((sum, p) => sum + p.security_groups, 0);
+    
+    return {
+      providerNames,
+      totalServers,
+      totalDatabases,
+      totalNetworks,
+      totalLBs,
+      totalSGs
+    };
+  };
+
+  const stats = getAggregatedStats();
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-8">
       {toast && (
@@ -211,50 +243,50 @@ export default function Home() {
               </div>
             )}
 
-            {result.success && (
+            {result.success && stats && (
               <div className="p-8 bg-white rounded-xl shadow-lg border">
                 <h3 className="text-2xl font-bold mb-6">Infrastructure détectée :</h3>
                 
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="text-sm text-gray-600">Provider</div>
-                    <div className="text-2xl font-bold text-blue-600 uppercase">
-                      {result.infrastructure.provider}
+                    <div className="text-sm text-gray-600">Provider(s)</div>
+                    <div className="text-2xl font-bold text-blue-600">
+                      {stats.providerNames}
                     </div>
                   </div>
                   
                   <div className="bg-purple-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Serveurs</div>
                     <div className="text-2xl font-bold text-purple-600">
-                      {result.infrastructure.servers}
+                      {stats.totalServers}
                     </div>
                   </div>
                   
                   <div className="bg-green-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Bases de données</div>
                     <div className="text-2xl font-bold text-green-600">
-                      {result.infrastructure.databases}
+                      {stats.totalDatabases}
                     </div>
                   </div>
                   
                   <div className="bg-yellow-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Réseaux</div>
                     <div className="text-2xl font-bold text-yellow-600">
-                      {result.infrastructure.networks}
+                      {stats.totalNetworks}
                     </div>
                   </div>
                   
                   <div className="bg-red-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Load Balancers</div>
                     <div className="text-2xl font-bold text-red-600">
-                      {result.infrastructure.load_balancers}
+                      {stats.totalLBs}
                     </div>
                   </div>
                   
                   <div className="bg-indigo-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Security Groups</div>
                     <div className="text-2xl font-bold text-indigo-600">
-                      {result.infrastructure.security_groups}
+                      {stats.totalSGs}
                     </div>
                   </div>
                 </div>

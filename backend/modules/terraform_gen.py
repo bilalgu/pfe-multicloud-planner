@@ -1,7 +1,6 @@
 from .security_rules import get_secure_settings
 
 # Configuration par provider
-# AWS/Azure/GCP/OpenStack sont des valeurs preparatoires (non testees)
 PROVIDER_CONFIGS = {
     "aws": {
         "region": "us-east-1",
@@ -33,17 +32,17 @@ PROVIDER_CONFIGS = {
 }
 
 
-def generate_terraform(infra: dict) -> str:
+def generate_terraform_single_provider(provider_config: dict) -> str:
     """
-    JSON infrastructure -> Code Terraform securise multi-cloud
-    Injecte automatiquement les politiques de securite via get_secure_settings()
-    Note : Tous les providers sont implementes, mais aucun n'est reellement teste actuellement
+    Genere le code Terraform pour un provider unique
+    Extrait de l'ancienne fonction generate_terraform()
     """
-    provider = infra.get("provider", "aws").lower()
-    servers = infra.get("servers", 0)
-    databases = infra.get("databases", 0)
-    networks = infra.get("networks", 1)
-    security_groups = infra.get("security_groups", 1)
+    provider = provider_config.get("provider", "aws").lower()
+    servers = provider_config.get("servers", 0)
+    databases = provider_config.get("databases", 0)
+    networks = provider_config.get("networks", 1)
+    security_groups = provider_config.get("security_groups", 1)
+    load_balancers = provider_config.get("load_balancers", 0)
     
     config = PROVIDER_CONFIGS.get(provider, PROVIDER_CONFIGS["aws"])
     
@@ -330,7 +329,6 @@ resource "google_compute_instance" "server_{i+1}" {{
 """
     
     # Load Balancers - Multi-cloud
-    load_balancers = infra.get("load_balancers", 0)
     for i in range(load_balancers):
         if provider == "aws":
             code += f"""# Load Balancer {i+1} (AWS)
@@ -660,3 +658,35 @@ output "infrastructure_id" {
 """
     
     return code
+
+
+def generate_terraform(infra: dict) -> str:
+    """
+    JSON infrastructure -> Code Terraform securise multi-cloud
+    Supporte mono et multi-provider
+    Format attendu: {"providers": [{"provider": "aws", "servers": 3, ...}]}
+    """
+    providers = infra.get("providers", [])
+    
+    # Si pas de providers, retourne vide
+    if not providers:
+        return "# Erreur: aucun provider specifie\n"
+    
+    # Cas mono-provider: genere directement
+    if len(providers) == 1:
+        return generate_terraform_single_provider(providers[0])
+    
+    # Cas multi-provider: concatene les codes Terraform
+    terraform_code = "# Infrastructure Multi-Cloud\n"
+    terraform_code += "# Genere automatiquement avec politiques de securite\n\n"
+    terraform_code += "# ATTENTION: Ce fichier contient plusieurs providers\n"
+    terraform_code += "# Il peut etre necessaire de le separer en plusieurs fichiers pour terraform apply\n\n"
+    
+    for idx, provider_config in enumerate(providers, 1):
+        provider_name = provider_config.get("provider", "unknown").upper()
+        terraform_code += f"\n{'#' * 80}\n"
+        terraform_code += f"# SECTION {idx}: {provider_name}\n"
+        terraform_code += f"{'#' * 80}\n\n"
+        terraform_code += generate_terraform_single_provider(provider_config)
+    
+    return terraform_code
