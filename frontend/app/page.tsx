@@ -44,6 +44,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<string>('all');
 
   // Auto-close toast après 5 secondes
   useEffect(() => {
@@ -53,103 +54,128 @@ export default function Home() {
     }
   }, [toast]);
 
+  // ────────────────────────────────────────────────
+  // Parser des sections par provider
+  // ────────────────────────────────────────────────
+  const extractProviderSections = (code: string) => {
+    const sections: Record<string, string> = {};
+    let currentProvider: string | null = null;
+    let currentLines: string[] = [];
+
+    const lines = code.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('# SECTION ')) {
+        // Sauvegarde section précédente
+        if (currentProvider && currentLines.length > 0) {
+          sections[currentProvider.toLowerCase()] = currentLines.join('\n').trim();
+        }
+        currentProvider = trimmed.replace('# SECTION ', '').trim();
+        currentLines = [];
+      } else if (currentProvider !== null) {
+        currentLines.push(line);
+      }
+    }
+
+    // Dernière section
+    if (currentProvider && currentLines.length > 0) {
+      sections[currentProvider.toLowerCase()] = currentLines.join('\n').trim();
+    }
+
+    // Si aucune section → tout dans 'all'
+    if (Object.keys(sections).length === 0 && code.trim()) {
+      sections['all'] = code.trim();
+    }
+
+    return sections;
+  };
+
+  const terraformSections = result?.terraform_code
+    ? extractProviderSections(result.terraform_code)
+    : {};
+
+  const providerKeys = Object.keys(terraformSections).filter(key => key !== 'all');
+  const hasMultipleProviders = providerKeys.length > 1;
+  const displayKey = hasMultipleProviders ? selectedProvider : 'all';
+
+  const getDisplayCode = () => {
+    if (!result?.terraform_code) return '';
+    return terraformSections[displayKey] || result.terraform_code;
+  };
+
+  const copyToClipboard = () => {
+    const code = getDisplayCode();
+    if (code) {
+      navigator.clipboard.writeText(code)
+        .then(() => setToast({ type: 'success', message: 'Code copié !' }))
+        .catch(() => setToast({ type: 'error', message: 'Erreur lors de la copie' }));
+    }
+  };
+
+  const downloadTerraform = () => {
+    const code = getDisplayCode();
+    if (code && code !== 'BLOCKED') {
+      const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `terraform-${displayKey !== 'all' ? displayKey.toUpperCase() : 'multi'}.tf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setToast({ type: 'success', message: 'Fichier téléchargé !' });
+    }
+  };
+
   const handleGenerate = async () => {
     if (!need.trim()) {
-      setToast({ type: 'error', message: 'Décris ton besoin d\'infrastructure !' });
+      setToast({ type: 'error', message: 'Décris ton besoin !' });
       return;
     }
 
     setLoading(true);
     setError('');
     setResult(null);
+    setSelectedProvider('all');
 
     try {
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ description: need }),
       });
 
-      if (!response.ok) {
-        throw new Error('Erreur lors de la génération');
-      }
+      if (!response.ok) throw new Error('Erreur serveur');
 
       const data = await response.json();
-      console.log('Réponse backend:', data);
       setResult(data);
+
       if (data.success) {
-        setToast({ type: 'success', message: 'Infrastructure générée avec succès !' });
+        setToast({ type: 'success', message: 'Génération terminée !' });
       } else {
-        setToast({ type: 'error', message: 'Génération bloquée pour raisons de sécurité' });
+        setToast({ type: 'error', message: 'Génération bloquée (sécurité)' });
       }
     } catch (err: any) {
-      const errorMessage = err.message || 'Une erreur est survenue';
-      setError(errorMessage);
-      setToast({ type: 'error', message: errorMessage });
-      console.error('Erreur:', err);
+      const msg = err.message || 'Erreur inattendue';
+      setError(msg);
+      setToast({ type: 'error', message: msg });
     } finally {
       setLoading(false);
     }
   };
 
-  const copyToClipboard = () => {
-    if (result?.terraform_code) {
-      navigator.clipboard.writeText(result.terraform_code)
-        .then(() => {
-          setToast({ type: 'success', message: 'Code Terraform copié dans le presse-papier !' });
-        })
-        .catch((err) => {
-          console.error('Erreur lors de la copie:', err);
-          setToast({ type: 'error', message: 'Impossible de copier. Essayez manuellement.' });
-        });
-    }
-  };
-
-  const downloadTerraform = () => {
-    if (result?.terraform_code && result.terraform_code !== 'BLOCKED') {
-      try {
-        const blob = new Blob([result.terraform_code], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'main.tf';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        setToast({ type: 'success', message: 'Fichier main.tf téléchargé avec succès !' });
-      } catch (err) {
-        console.error('Erreur lors du téléchargement:', err);
-        setToast({ type: 'error', message: 'Impossible de télécharger le fichier.' });
-      }
-    }
-  };
-
-  // Aggrege les stats pour l'affichage (somme de tous les providers)
+  // Stats agrégées (inchangé)
   const getAggregatedStats = () => {
     if (!result?.infrastructure?.providers) return null;
-    
     const providers = result.infrastructure.providers;
-    
-    // Liste des providers detectes
     const providerNames = providers.map(p => p.provider.toUpperCase()).join(' + ');
-    
-    // Somme de toutes les ressources
-    const totalServers = providers.reduce((sum, p) => sum + p.servers, 0);
-    const totalDatabases = providers.reduce((sum, p) => sum + p.databases, 0);
-    const totalNetworks = providers.reduce((sum, p) => sum + p.networks, 0);
-    const totalLBs = providers.reduce((sum, p) => sum + p.load_balancers, 0);
-    const totalSGs = providers.reduce((sum, p) => sum + p.security_groups, 0);
-    
     return {
       providerNames,
-      totalServers,
-      totalDatabases,
-      totalNetworks,
-      totalLBs,
-      totalSGs
+      totalServers: providers.reduce((s, p) => s + p.servers, 0),
+      totalDatabases: providers.reduce((s, p) => s + p.databases, 0),
+      totalNetworks: providers.reduce((s, p) => s + p.networks, 0),
+      totalLBs: providers.reduce((s, p) => s + p.load_balancers, 0),
+      totalSGs: providers.reduce((s, p) => s + p.security_groups, 0),
     };
   };
 
@@ -164,6 +190,7 @@ export default function Home() {
           <SuccessToast message={toast.message} onClose={() => setToast(null)} />
         )
       )}
+
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">
           Planificateur d'architectures sécurisées multi-cloud
@@ -175,7 +202,7 @@ export default function Home() {
         <textarea
           value={need}
           onChange={(e) => setNeed(e.target.value)}
-          placeholder="Exemple : J'ai besoin de 3 serveurs web sur AWS avec une base de données MySQL"
+          placeholder="Exemple : 3 serveurs web sur AWS + stockage sur GCP"
           className="w-full h-64 p-6 text-lg border-2 border-gray-300 rounded-xl focus:border-blue-600 focus:outline-none resize-none font-mono"
           disabled={loading}
         />
@@ -183,7 +210,7 @@ export default function Home() {
         <button
           onClick={handleGenerate}
           disabled={loading || !need.trim()}
-          className="mt-8 px-12 py-5 bg-blue-600 hover:bg-blue-700 text-white text-xl font-semibold rounded-xl shadow-lg transition transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none"
+          className="mt-8 px-12 py-5 bg-blue-600 hover:bg-blue-700 text-white text-xl font-semibold rounded-xl shadow-lg transition transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
           {loading ? 'Génération...' : 'Générer l\'infra'}
         </button>
@@ -198,11 +225,13 @@ export default function Home() {
 
         {result && (
           <div className="mt-12 space-y-6">
+            {/* Message principal */}
             <div className={`p-6 border-2 rounded-xl ${result.success ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>
               <strong>{result.message}</strong>
             </div>
 
-            {result.security_report && result.security_report.dangerous_requests && result.security_report.dangerous_requests.length > 0 && (
+            {/* Rapports sécurité (inchangé) */}
+            {result.security_report?.dangerous_requests?.length ? (
               <div className="p-6 bg-red-100 border-2 border-red-500 rounded-xl">
                 <h3 className="text-xl font-bold text-red-800 mb-4">
                   Demandes bloquées ({result.security_report.dangerous_requests.length})
@@ -210,18 +239,14 @@ export default function Home() {
                 {result.security_report.dangerous_requests.map((d, i) => (
                   <div key={i} className="mb-3 p-4 bg-white rounded-lg">
                     <div className="font-bold text-red-600">Demande : {d.requested}</div>
-                    <div className="text-sm text-gray-700 mt-1">
-                      Raison : {d.reason}
-                    </div>
-                    <div className="text-sm text-green-600 mt-1">
-                      Appliqué : {d.applied}
-                    </div>
+                    <div className="text-sm text-gray-700 mt-1">Raison : {d.reason}</div>
+                    <div className="text-sm text-green-600 mt-1">Appliqué : {d.applied}</div>
                   </div>
                 ))}
               </div>
-            )}
+            ) : null}
 
-            {result.security_report && result.security_report.violations.length > 0 && (
+            {result.security_report?.violations?.length ? (
               <div className="p-6 bg-orange-100 border-2 border-orange-400 rounded-xl">
                 <h3 className="text-xl font-bold text-orange-800 mb-4">
                   Alertes de sécurité ({result.security_report.violations.length})
@@ -229,92 +254,104 @@ export default function Home() {
                 {result.security_report.violations.map((v, i) => (
                   <div key={i} className="mb-3 p-4 bg-white rounded-lg">
                     <div className="font-bold text-red-600">{v.message}</div>
-                    <div className="text-sm text-gray-600 mt-1">
-                      Recommandation : {v.recommendation}
-                    </div>
+                    <div className="text-sm text-gray-600 mt-1">Recommandation : {v.recommendation}</div>
                   </div>
                 ))}
                 <div className="mt-4 text-sm font-semibold">
-                  Score de sécurité : 
+                  Score de sécurité :{' '}
                   <span className={result.security_report.security_score >= 80 ? 'text-green-600' : 'text-red-600'}>
-                    {' '}{result.security_report.security_score}/100
+                    {result.security_report.security_score}/100
                   </span>
                 </div>
               </div>
-            )}
+            ) : null}
 
+            {/* Stats agrégées */}
             {result.success && stats && (
               <div className="p-8 bg-white rounded-xl shadow-lg border">
                 <h3 className="text-2xl font-bold mb-6">Infrastructure détectée :</h3>
-                
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Provider(s)</div>
-                    <div className="text-2xl font-bold text-blue-600">
-                      {stats.providerNames}
-                    </div>
+                    <div className="text-2xl font-bold text-blue-600">{stats.providerNames}</div>
                   </div>
-                  
                   <div className="bg-purple-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Serveurs</div>
-                    <div className="text-2xl font-bold text-purple-600">
-                      {stats.totalServers}
-                    </div>
+                    <div className="text-2xl font-bold text-purple-600">{stats.totalServers}</div>
                   </div>
-                  
+                  {/* ... les autres cartes inchangées ... */}
                   <div className="bg-green-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Bases de données</div>
-                    <div className="text-2xl font-bold text-green-600">
-                      {stats.totalDatabases}
-                    </div>
+                    <div className="text-2xl font-bold text-green-600">{stats.totalDatabases}</div>
                   </div>
-                  
                   <div className="bg-yellow-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Réseaux</div>
-                    <div className="text-2xl font-bold text-yellow-600">
-                      {stats.totalNetworks}
-                    </div>
+                    <div className="text-2xl font-bold text-yellow-600">{stats.totalNetworks}</div>
                   </div>
-                  
                   <div className="bg-red-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Load Balancers</div>
-                    <div className="text-2xl font-bold text-red-600">
-                      {stats.totalLBs}
-                    </div>
+                    <div className="text-2xl font-bold text-red-600">{stats.totalLBs}</div>
                   </div>
-                  
                   <div className="bg-indigo-50 p-4 rounded-lg">
                     <div className="text-sm text-gray-600">Security Groups</div>
-                    <div className="text-2xl font-bold text-indigo-600">
-                      {stats.totalSGs}
-                    </div>
+                    <div className="text-2xl font-bold text-indigo-600">{stats.totalSGs}</div>
                   </div>
                 </div>
               </div>
             )}
 
-            {result.success && (
+            {/* ──── NOUVEAU : AFFICHAGE CODE AVEC ONGLETS ──── */}
+            {result.success && result.terraform_code && result.terraform_code !== 'BLOCKED' && (
               <div className="p-8 bg-white rounded-xl shadow-lg border">
-                <h3 className="text-2xl font-bold mb-4">Code généré :</h3>
-                
-                <div className="flex gap-3 mb-4">
-                  <button
-                    onClick={copyToClipboard}
-                    className="flex-1 px-5 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-semibold transition-all"
-                  >
-                    Copier
-                  </button>
-                  
-                  <button
-                    onClick={downloadTerraform}
-                    className="flex-1 px-5 py-2.5 bg-purple-500 hover:bg-purple-600 text-white rounded-lg font-semibold transition-all"
-                  >
-                    Télécharger .tf
-                  </button>
+                <h3 className="text-2xl font-bold mb-4">Code Terraform généré</h3>
+
+                {/* Onglets providers (seulement si > 1) */}
+                {hasMultipleProviders && (
+                  <div className="flex flex-wrap gap-2 mb-5 border-b pb-2">
+                    {providerKeys.map((key) => (
+                      <button
+                        key={key}
+                        onClick={() => setSelectedProvider(key)}
+                        className={`
+                          px-5 py-2.5 rounded-t-lg font-medium transition
+                          ${selectedProvider === key
+                            ? 'bg-blue-600 text-white shadow'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}
+                        `}
+                      >
+                        {key.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Titre du bloc code */}
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-lg font-semibold text-gray-800">
+                    {hasMultipleProviders
+                      ? `Terraform – ${selectedProvider.toUpperCase()}`
+                      : 'Terraform complet'}
+                  </h4>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={copyToClipboard}
+                      className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+                    >
+                      Copier
+                    </button>
+                    <button
+                      onClick={downloadTerraform}
+                      className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition"
+                    >
+                      Télécharger .tf
+                    </button>
+                  </div>
                 </div>
-                
-                <pre className="bg-gray-900 text-green-400 p-6 rounded-lg overflow-auto text-sm font-mono leading-relaxed max-h-96">
-                  {result.terraform_code}
+
+                {/* Le code */}
+                <pre className="bg-gray-900 text-green-300 p-6 rounded-lg overflow-auto text-sm font-mono leading-relaxed max-h-[500px] border border-gray-700">
+                  {getDisplayCode()}
                 </pre>
               </div>
             )}
@@ -324,6 +361,7 @@ export default function Home() {
                 setNeed('');
                 setResult(null);
                 setError('');
+                setSelectedProvider('all');
               }}
               className="w-full px-8 py-4 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold transition"
             >
