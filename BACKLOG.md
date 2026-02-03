@@ -1,6 +1,6 @@
-# BACKLOG - Multi-Cloud Planner (optimisé DÉMO)
+# BACKLOG - Multi-Cloud Planner
 
-## P0 - CRITIQUE DÉMO
+## P0
 
 ### Déploiement AWS réel
 
@@ -22,7 +22,7 @@
 - Terraform destroy automatique en cas erreur (rollback)
 - Fichiers : `backend/app.py`, `backend/modules/terraform_deploy.py` (nouveau)
 
-### Corrections critiques
+### Corrections
 
 **3. Gestion sécurisée des secrets**
 
@@ -45,7 +45,7 @@
 - Générer au minimum 2 subnets dans 2 Availability Zones différentes
 - Fichiers : `backend/modules/terraform_gen.py`
 
-### UI temps réel (effet WOW démo)
+### UI temps réel
 
 **6. Affichage logs déploiement en temps réel**
 
@@ -77,9 +77,7 @@
 
 ---
 
-## P1 - IMPORTANT DÉMO
-
-### Attendu jury
+## P1 - IMPORTANT
 
 **10. Génération Ansible**
 
